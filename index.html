@@ -78,6 +78,63 @@ tr.total td{font-weight:800;background:#fafbff;}
 canvas{max-height:280px;}
 @media (max-width:900px){.kpis{grid-template-columns:repeat(2,1fr);}.grid2{grid-template-columns:1fr;}.insights{grid-template-columns:1fr;}}
 </style>
+<style>
+/* ===== AI Chatbot (appended — purely additive, reuses existing dashboard CSS vars) ===== */
+#hrbot-fab{
+  position:fixed; right:22px; bottom:22px; width:58px; height:58px; border-radius:50%;
+  background:var(--blue); color:#fff; border:none; cursor:pointer; z-index:9999;
+  font-size:26px; display:flex; align-items:center; justify-content:center;
+  box-shadow:0 6px 18px rgba(47,95,255,.45); transition:transform .15s;
+}
+#hrbot-fab:hover{ transform:scale(1.07); }
+#hrbot-panel{
+  position:fixed; right:22px; bottom:90px; width:390px; max-width:92vw;
+  background:var(--card); border:1px solid var(--border); border-radius:16px;
+  box-shadow:0 12px 36px rgba(0,0,0,.18); z-index:9999; display:none;
+  flex-direction:column; overflow:hidden; font-family:inherit;
+}
+#hrbot-panel.open{ display:flex; }
+#hrbot-header{
+  background:var(--ink); color:#fff; padding:14px 16px; font-weight:800; font-size:14px;
+  display:flex; align-items:center; justify-content:space-between;
+}
+#hrbot-header span.sub{ font-weight:600; font-size:11px; color:#aab2c5; display:block; margin-top:2px; }
+#hrbot-close{ background:none; border:none; color:#fff; font-size:18px; cursor:pointer; opacity:.8; }
+#hrbot-close:hover{ opacity:1; }
+#hrbot-messages{
+  max-height:320px; min-height:180px; overflow-y:auto; padding:14px; background:var(--bg, #f4f6fb);
+  display:flex; flex-direction:column; gap:10px;
+}
+.hrbot-msg{ font-size:12.8px; line-height:1.5; padding:9px 12px; border-radius:12px; max-width:88%; }
+.hrbot-msg.bot{ background:#fff; border:1px solid var(--border); color:var(--ink); align-self:flex-start; border-bottom-left-radius:4px; }
+.hrbot-msg.user{ background:var(--blue); color:#fff; align-self:flex-end; border-bottom-right-radius:4px; }
+.hrbot-msg table{ width:100%; border-collapse:collapse; font-size:11.5px; margin-top:6px; }
+.hrbot-msg th, .hrbot-msg td{ padding:4px 6px; border-bottom:1px solid var(--border); text-align:right; }
+.hrbot-msg th:first-child, .hrbot-msg td:first-child{ text-align:left; }
+.hrbot-typing{ display:flex; gap:4px; padding:10px 12px; align-self:flex-start; }
+.hrbot-typing span{ width:6px; height:6px; border-radius:50%; background:var(--sub); display:inline-block; animation:hrbot-bounce 1s infinite; }
+.hrbot-typing span:nth-child(2){ animation-delay:.15s; }
+.hrbot-typing span:nth-child(3){ animation-delay:.3s; }
+@keyframes hrbot-bounce{ 0%,60%,100%{ transform:translateY(0); opacity:.4; } 30%{ transform:translateY(-4px); opacity:1; } }
+#hrbot-chips{ display:flex; flex-wrap:wrap; gap:6px; padding:10px 14px; border-top:1px solid var(--border); background:#fff; }
+.hrbot-chip{
+  background:var(--card); border:1px solid var(--blue); color:var(--blue); font-size:10.8px; font-weight:700;
+  padding:5px 10px; border-radius:14px; cursor:pointer; white-space:nowrap;
+}
+.hrbot-chip:hover{ background:var(--blue); color:#fff; }
+#hrbot-inputrow{ display:flex; gap:8px; padding:12px 14px; border-top:1px solid var(--border); background:#fff; }
+#hrbot-input{
+  flex:1; border:1px solid var(--border); border-radius:10px; padding:9px 12px; font-size:12.8px; outline:none;
+}
+#hrbot-input:focus{ border-color:var(--blue); }
+#hrbot-send{
+  background:var(--blue); color:#fff; border:none; border-radius:10px; padding:0 16px; font-weight:700;
+  font-size:12.8px; cursor:pointer;
+}
+.hrbot-good{ color:var(--green); font-weight:700; }
+.hrbot-bad{ color:var(--red); font-weight:700; }
+@media (max-width:480px){ #hrbot-panel{ right:10px; left:10px; width:auto; bottom:84px; } #hrbot-fab{ right:16px; bottom:16px; } }
+</style>
 </head>
 <body>
 
@@ -880,6 +937,895 @@ document.getElementById('pageNav').addEventListener('click',e=>{
 });
 
 loadAllData();
+</script>
+
+<style>
+/* ===== AI Chatbot (additive, zero-API, reads window DATA) ===== */
+#hrbot-fab{
+  position:fixed; bottom:22px; right:22px; width:56px; height:56px; border-radius:50%;
+  background:var(--blue); color:#fff; border:none; font-size:24px; cursor:pointer;
+  box-shadow:0 6px 18px rgba(47,95,255,.4); z-index:9999; display:flex; align-items:center; justify-content:center;
+  transition:transform .15s;
+}
+#hrbot-fab:hover{ transform:scale(1.07); }
+#hrbot-panel{
+  position:fixed; bottom:88px; right:22px; width:390px; max-width:92vw; background:var(--card);
+  border:1px solid var(--border); border-radius:16px; box-shadow:0 12px 36px rgba(0,0,0,.18);
+  z-index:9999; display:none; flex-direction:column; overflow:hidden; font-family:'Segoe UI',system-ui,Arial,sans-serif;
+}
+#hrbot-panel.open{ display:flex; }
+#hrbot-header{
+  background:var(--ink); color:#fff; padding:13px 16px; font-weight:800; font-size:14px;
+  display:flex; align-items:center; justify-content:space-between;
+}
+#hrbot-header span.sub{ font-weight:500; font-size:11px; color:#aab2c5; display:block; margin-top:2px; }
+#hrbot-close{ background:none; border:none; color:#fff; font-size:18px; cursor:pointer; line-height:1; opacity:.8; }
+#hrbot-close:hover{ opacity:1; }
+#hrbot-messages{
+  flex:1; max-height:320px; overflow-y:auto; padding:14px; display:flex; flex-direction:column; gap:10px;
+  background:var(--bg);
+}
+.hrbot-msg{ max-width:86%; font-size:13px; line-height:1.45; padding:9px 12px; border-radius:12px; }
+.hrbot-msg.bot{ background:var(--card); border:1px solid var(--border); color:var(--ink); align-self:flex-start; border-bottom-left-radius:4px; }
+.hrbot-msg.user{ background:var(--blue); color:#fff; align-self:flex-end; border-bottom-right-radius:4px; }
+.hrbot-msg table{ width:100%; border-collapse:collapse; font-size:12px; margin-top:6px; }
+.hrbot-msg th, .hrbot-msg td{ padding:4px 6px; text-align:left; border-bottom:1px solid var(--border); }
+.hrbot-typing{ display:flex; gap:4px; align-self:flex-start; padding:10px 14px; background:var(--card); border:1px solid var(--border); border-radius:12px; }
+.hrbot-typing span{ width:6px; height:6px; border-radius:50%; background:var(--sub); display:inline-block; animation:hrbot-bounce 1s infinite ease-in-out; }
+.hrbot-typing span:nth-child(2){ animation-delay:.15s; }
+.hrbot-typing span:nth-child(3){ animation-delay:.3s; }
+@keyframes hrbot-bounce{ 0%,80%,100%{ transform:translateY(0); opacity:.5; } 40%{ transform:translateY(-4px); opacity:1; } }
+#hrbot-chips{ display:flex; flex-wrap:wrap; gap:6px; padding:10px 14px; border-top:1px solid var(--border); background:var(--card); }
+.hrbot-chip{
+  border:1px solid var(--border); background:var(--bg); color:var(--ink); font-size:11px; font-weight:600;
+  padding:6px 10px; border-radius:14px; cursor:pointer; white-space:nowrap;
+}
+.hrbot-chip:hover{ background:var(--blue2); border-color:var(--blue); color:var(--blue); }
+#hrbot-inputrow{ display:flex; gap:8px; padding:10px 14px; border-top:1px solid var(--border); background:var(--card); }
+#hrbot-input{ flex:1; border:1px solid var(--border); border-radius:10px; padding:9px 12px; font-size:13px; outline:none; }
+#hrbot-input:focus{ border-color:var(--blue); }
+#hrbot-send{ background:var(--blue); color:#fff; border:none; border-radius:10px; padding:0 14px; font-weight:700; cursor:pointer; font-size:13px; }
+#hrbot-send:hover{ opacity:.9; }
+@media (max-width:480px){ #hrbot-panel{ right:10px; left:10px; width:auto; bottom:84px; } #hrbot-fab{ right:18px; } }
+</style>
+
+<script>
+(function(){
+  // ---------- tiny helpers (independent of existing globals, so nothing existing is touched) ----------
+  function hb_last(arr){ if(!arr) return null; for(let i=arr.length-1;i>=0;i--) if(arr[i]!=null) return arr[i]; return null; }
+  function hb_lastIdx(arr){ if(!arr) return -1; for(let i=arr.length-1;i>=0;i--) if(arr[i]!=null) return i; return -1; }
+  function hb_prevOf(arr,i){ if(!arr) return null; for(let k=i-1;k>=0;k--) if(arr[k]!=null) return arr[k]; return null; }
+  function hb_fmt(v,suf='%'){ return v==null ? '—' : (Math.round(v*10)/10)+suf; }
+  function hb_dir(curr,prev){ if(curr==null||prev==null||curr===prev) return '➡️'; return curr>prev ? '📈' : '📉'; }
+  function hb_norm(s){ return String(s||'').replace(/[^a-z0-9]/gi,'').toLowerCase(); }
+
+  const P_LABEL = { MP:'Marketplace', SaaS:'SaaS' };
+  const L_LABEL = { MS:'Mid+Senior', E:'Entry' };
+
+  function hb_getDataset(p,l){
+    try{ return (window.DATA||DATA)[p][l]; }catch(e){ return null; }
+  }
+
+  // ---------- segment detection ----------
+  function hb_detectSegments(q){
+    const t = q.toLowerCase();
+    let platforms = [];
+    let levels = [];
+    if(/\bmp\b|marketplace/.test(t)) platforms.push('MP');
+    if(/\bsaas\b/.test(t)) platforms.push('SaaS');
+    if(/\bentry\b/.test(t)) levels.push('E');
+    if(/\bms\b|mid\s*\+?\s*senior|\bmid\b|\bsenior\b/.test(t)) levels.push('MS');
+    if(!platforms.length) platforms = ['MP','SaaS'];
+    if(!levels.length) levels = ['MS','E'];
+    const segs = [];
+    platforms.forEach(p => levels.forEach(l => segs.push({ p, l, label: P_LABEL[p]+' · '+L_LABEL[l] })));
+    return segs;
+  }
+
+  // ---------- period-token (quarter/month label) extraction for "X vs Y" comparisons ----------
+  function hb_extractPeriods(q){
+    const matches = q.match(/[A-Za-z]{3,4}'\d{2}/g) || [];
+    return Array.from(new Set(matches));
+  }
+  function hb_findMonthIdx(dataset, token){
+    if(!dataset || !dataset.months) return -1;
+    return dataset.months.findIndex(m => hb_norm(m) === hb_norm(token));
+  }
+
+  // ---------- metric keyword (used inside trend / quarter-compare to pick which metric) ----------
+  function hb_metricFromQuery(q, fallback){
+    if(/manning/.test(q)) return 'manning';
+    if(/headcount|\bhc\b/.test(q)) return 'headcount';
+    if(/joining/.test(q)) return 'joining';
+    if(/voluntary/.test(q)) return 'voluntary';
+    if(/offer/.test(q)) return 'offer';
+    if(/attrition/.test(q)) return 'attrition';
+    return fallback || 'attrition';
+  }
+  function hb_metricSeries(dataset, metricKey){
+    switch(metricKey){
+      case 'manning': return { arr: dataset.manning && dataset.manning['Total'], label:'Manning %', suf:'%' };
+      case 'headcount': return { arr: dataset.hc && dataset.hc['Total'], label:'Headcount', suf:'' };
+      case 'joining': return { arr: dataset.joinings && dataset.joinings['Total'], label:'Joinings', suf:'' };
+      case 'voluntary': return { arr: dataset.attrition && dataset.attrition.voluntary, label:'Voluntary Attrition %', suf:'%' };
+      case 'offer': return { arr: dataset.offerJoin && dataset.offerJoin['Total'], label:'Offer→Join %', suf:'%' };
+      default: return { arr: dataset.attrition && dataset.attrition.total, label:'Total Attrition %', suf:'%' };
+    }
+  }
+
+  function hb_eachSegment(segments, fn){
+    return segments.map(seg=>{
+      const dataset = hb_getDataset(seg.p, seg.l);
+      if(!dataset) return `<b>${seg.label}:</b> data abhi load nahi hui — thodi der baad try karo.`;
+      return fn(dataset, seg);
+    }).join('<br><br>');
+  }
+
+  // ---------- intent detection ----------
+  function hb_detectIntent(q){
+    if(/help|madad|kya kya|what can you|commands/.test(q)) return 'help';
+    if(/summary|overall|health|sehat|kaisa chal/.test(q)) return 'summary';
+    if(/compare|\bvs\b|versus/.test(q)) return 'compare';
+    if(/24m|12-24|6-12|0-6|tenure|band/.test(q)) return 'tenure_attr';
+    if(/\bdept\b|department/.test(q)) return 'dept';
+    if(/voluntary/.test(q)) return 'voluntary';
+    if(/sourc|naukri|referral|linkedin/.test(q)) return 'sourcing';
+    if(/onboard|adherence|induction|market visit/.test(q)) return 'onboarding';
+    if(/offer/.test(q)) return 'offer';
+    if(/headcount|\bhc\b/.test(q)) return 'headcount';
+    if(/joining|hire|hiring|peak month/.test(q)) return 'joining';
+    if(/trend|monthly|month.?wise|trajectory/.test(q)) return 'trend';
+    if(/manning/.test(q)) return 'manning';
+    if(/attrition|attr\b/.test(q)) return 'attrition';
+    return 'fallback';
+  }
+
+  // ---------- intent handlers ----------
+  function hb_help(){
+    return `<b>🤖 Main yeh sab pooch sakte ho:</b><br>
+    • <b>Attrition</b> — "attrition kya hai", "JFM'26 vs OND'25 attrition compare"<br>
+    • <b>Joining</b> — "joinings kitne hue", "highest joining month"<br>
+    • <b>Manning</b> — "manning % latest", "weakest dept manning"<br>
+    • <b>Headcount</b> — "headcount trend"<br>
+    • <b>Offer→Join</b> — "offer to join %"<br>
+    • <b>Voluntary</b> — "voluntary attrition kitna hai"<br>
+    • <b>Dept-wise</b> — "which dept is weak", "dept wise attrition"<br>
+    • <b>Compare</b> — "MP vs SaaS compare"<br>
+    • <b>Summary</b> — "overall summary", "MP vs SaaS summary"<br>
+    • <b>Onboarding</b> — "adherence", "induction", "market visits"<br>
+    • <b>Tenure attrition</b> — "0-6M attrition", "24M+ band"<br>
+    • <b>Trend</b> — "attrition trend month wise"<br>
+    • <b>Sourcing</b> — "source mix", "sourcing ratio"<br><br>
+    👉 Segment filter ke liye bol do: <b>MP / SaaS / Entry / MS / Mid / Senior</b> — warna main saare 4 segments dikha dunga.`;
+  }
+
+  function hb_summary(segments){
+    return hb_eachSegment(segments, (d, seg)=>{
+      const man = hb_last(d.manning && d.manning['Total']);
+      const attr = hb_last(d.attrition && d.attrition.total);
+      const off = hb_last(d.offerJoin && d.offerJoin['Total']);
+      const adh = hb_last(d.adherence);
+      function sig(v, goodFn, warnFn){ if(v==null) return 'ℹ️'; return goodFn(v) ? '✅' : warnFn(v) ? '⚠️' : '🔴'; }
+      const manSig = sig(man, v=>v>=98, v=>v>=90);
+      const attrSig = sig(attr, v=>v<=10, v=>v<=20);
+      const offSig = sig(off, v=>v>=80, v=>v>=60);
+      const adhSig = sig(adh, v=>v>=90, v=>v>=75);
+      return `<b>${seg.label}</b><br>
+      ${manSig} Manning: <b>${hb_fmt(man)}</b><br>
+      ${attrSig} Attrition: <b>${hb_fmt(attr)}</b><br>
+      ${offSig} Offer→Join: <b>${hb_fmt(off)}</b><br>
+      ${adhSig} Adherence: <b>${hb_fmt(adh)}</b>`;
+    });
+  }
+
+  function hb_compare(segments){
+    const levels = Array.from(new Set(segments.map(s=>s.l)));
+    return levels.map(l=>{
+      const mp = hb_getDataset('MP', l), saas = hb_getDataset('SaaS', l);
+      if(!mp || !saas) return `<b>${L_LABEL[l]}:</b> data abhi load nahi hui.`;
+      const rows = [
+        ['Manning %', hb_fmt(hb_last(mp.manning&&mp.manning['Total'])), hb_fmt(hb_last(saas.manning&&saas.manning['Total']))],
+        ['Headcount', hb_last(mp.hc&&mp.hc['Total'])??'—', hb_last(saas.hc&&saas.hc['Total'])??'—'],
+        ['Total Attrition %', hb_fmt(hb_last(mp.attrition&&mp.attrition.total)), hb_fmt(hb_last(saas.attrition&&saas.attrition.total))],
+        ['Offer→Join %', hb_fmt(hb_last(mp.offerJoin&&mp.offerJoin['Total'])), hb_fmt(hb_last(saas.offerJoin&&saas.offerJoin['Total']))],
+      ];
+      let table = `<b>MP vs SaaS — ${L_LABEL[l]}</b><table><tr><th>Metric</th><th>MP</th><th>SaaS</th></tr>`;
+      rows.forEach(r=>{ table += `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td></tr>`; });
+      table += '</table>';
+      return table;
+    }).join('<br><br>');
+  }
+
+  function hb_tenureAttr(segments){
+    return hb_eachSegment(segments, (d, seg)=>{
+      const a = d.attrition || {};
+      let rows;
+      if(a.t24){
+        rows = [['24M+', hb_last(a.t24)], ['12-24M', hb_last(a.t12_24)], ['6-12M', hb_last(a.t6_12)], ['0-6M', hb_last(a.t0_6)]];
+      } else {
+        rows = [['12M+', hb_last(a.t12p)], ['6-12M', hb_last(a.t6_12)], ['3-6M', hb_last(a.t3_6)], ['0-3M', hb_last(a.t0_3)]];
+      }
+      const lines = rows.map(([lbl,v])=>`${lbl}: <b>${hb_fmt(v)}</b>`).join(' | ');
+      return `<b>${seg.label}</b> — Tenure-wise Voluntary Attrition:<br>${lines}`;
+    });
+  }
+
+  function hb_dept(segments){
+    return hb_eachSegment(segments, (d, seg)=>{
+      const manEntries = Object.entries(d.manning||{}).filter(([k])=>k!=='Total').map(([k,v])=>[k, hb_last(v)]).filter(([,v])=>v!=null);
+      const attrEntries = Object.entries((d.attrition&&d.attrition.byDeptTotal)||{}).filter(([k])=>k!=='Total').map(([k,v])=>[k, hb_last(v)]).filter(([,v])=>v!=null);
+      manEntries.sort((a,b)=>a[1]-b[1]);
+      attrEntries.sort((a,b)=>b[1]-a[1]);
+      const weakManning = manEntries[0] ? `<b>${manEntries[0][0]}</b> (${hb_fmt(manEntries[0][1])})` : '—';
+      const worstAttr = attrEntries[0] ? `<b>${attrEntries[0][0]}</b> (${hb_fmt(attrEntries[0][1])})` : '—';
+      const topAttrLines = attrEntries.slice(0,5).map(([k,v])=>`${k}: ${hb_fmt(v)}`).join('<br>');
+      return `<b>${seg.label}</b><br>
+      ⚠️ Weakest manning dept: ${weakManning}<br>
+      🔴 Highest attrition dept: ${worstAttr}<br>
+      <i>Top 5 attrition depts:</i><br>${topAttrLines || '—'}`;
+    });
+  }
+
+  function hb_voluntary(segments){
+    return hb_eachSegment(segments, (d, seg)=>{
+      const arr = d.attrition && d.attrition.voluntary;
+      const i = hb_lastIdx(arr);
+      const curr = arr ? arr[i] : null;
+      const prev = hb_prevOf(arr, i);
+      return `<b>${seg.label}</b> Voluntary Attrition: <b>${hb_fmt(curr)}</b> ${hb_dir(curr,prev)} (prev: ${hb_fmt(prev)})`;
+    });
+  }
+
+  function hb_sourcing(segments){
+    return hb_eachSegment(segments, (d, seg)=>{
+      const ratio = hb_last(d.sourcing && d.sourcing['Total']);
+      const mix = hb_last(d.sourceMix && d.sourceMix['Total']);
+      return `<b>${seg.label}</b><br>Sourcing:Selection Ratio: <b>1:${ratio??'—'}</b><br>Non-Referral Source Mix: <b>${hb_fmt(mix)}</b>`;
+    });
+  }
+
+  function hb_onboarding(segments){
+    return hb_eachSegment(segments, (d, seg)=>{
+      const adh = hb_last(d.adherence);
+      const ic = hb_last(d.inductionCross);
+      const ifc = hb_last(d.inductionFunc);
+      const mv = hb_last(d.marketVisits);
+      if(adh==null && ic==null && ifc==null && mv==null){
+        return `<b>${seg.label}:</b> Onboarding/adherence metrics is level ke liye track nahi hote.`;
+      }
+      return `<b>${seg.label}</b><br>Adherence: <b>${hb_fmt(adh)}</b> | Cross-Func Induction: <b>${hb_fmt(ic)}</b><br>Functional Induction: <b>${hb_fmt(ifc)}</b> | Market Visits: <b>${hb_fmt(mv)}</b>`;
+    });
+  }
+
+  function hb_offer(segments){
+    return hb_eachSegment(segments, (d, seg)=>{
+      const arr = d.offerJoin && d.offerJoin['Total'];
+      const i = hb_lastIdx(arr);
+      const curr = arr ? arr[i] : null, prev = hb_prevOf(arr,i);
+      const sig = curr==null ? 'ℹ️' : curr>=80 ? '✅' : curr>=60 ? '⚠️' : '🔴';
+      return `${sig} <b>${seg.label}</b> Offer→Join: <b>${hb_fmt(curr)}</b> ${hb_dir(curr,prev)} (prev: ${hb_fmt(prev)})`;
+    });
+  }
+
+  function hb_headcount(segments){
+    return hb_eachSegment(segments, (d, seg)=>{
+      const arr = d.hc && d.hc['Total'];
+      if(!arr) return `<b>${seg.label}:</b> headcount data unavailable.`;
+      const start = arr.find(v=>v!=null);
+      const curr = hb_last(arr);
+      const i = hb_lastIdx(arr); const prev = hb_prevOf(arr,i);
+      const pctChange = (start!=null && curr!=null && start!==0) ? Math.round(((curr-start)/start)*100) : null;
+      return `<b>${seg.label}</b> Headcount: <b>${curr??'—'}</b> ${hb_dir(curr,prev)}<br>Start: ${start??'—'} → Now: ${curr??'—'} (${pctChange!=null?(pctChange>=0?'+':'')+pctChange+'%':'—'})`;
+    });
+  }
+
+  function hb_joining(segments){
+    return hb_eachSegment(segments, (d, seg)=>{
+      const arr = d.joinings && d.joinings['Total'];
+      const months = d.months || [];
+      if(!arr) return `<b>${seg.label}:</b> joinings data unavailable.`;
+      const total = arr.reduce((s,v)=>s+(v||0),0);
+      let peakIdx = -1, peakVal = -1;
+      arr.forEach((v,i)=>{ if(v!=null && v>peakVal){ peakVal=v; peakIdx=i; } });
+      const peakMonth = peakIdx>=0 ? months[peakIdx] : '—';
+      return `<b>${seg.label}</b> Total Joinings: <b>${total}</b><br>📈 Peak month: <b>${peakMonth}</b> (${peakVal>=0?peakVal:'—'} joinings)`;
+    });
+  }
+
+  function hb_trend(q, segments){
+    const metricKey = hb_metricFromQuery(q, 'attrition');
+    return hb_eachSegment(segments, (d, seg)=>{
+      const { arr, label, suf } = hb_metricSeries(d, metricKey);
+      const months = d.months || [];
+      if(!arr) return `<b>${seg.label}:</b> ${label} data unavailable.`;
+      const parts = [];
+      for(let i=0;i<arr.length;i++){
+        if(arr[i]==null) continue;
+        const prev = hb_prevOf(arr, i);
+        const emoji = prev!=null ? hb_dir(arr[i],prev) : '';
+        parts.push(`${months[i]}: <b>${arr[i]}${suf}</b> ${emoji}`.trim());
+      }
+      return `<b>${seg.label}</b> — ${label} trend:<br>${parts.join(' &nbsp;→&nbsp; ')}`;
+    });
+  }
+
+  function hb_manning(segments){
+    return hb_eachSegment(segments, (d, seg)=>{
+      const arr = d.manning && d.manning['Total'];
+      const i = hb_lastIdx(arr);
+      const curr = arr ? arr[i] : null, prev = hb_prevOf(arr,i);
+      const sig = curr==null ? 'ℹ️' : curr>=98 ? '✅' : curr>=90 ? '⚠️' : '🔴';
+      const entries = Object.entries(d.manning||{}).filter(([k])=>k!=='Total').map(([k,v])=>[k,hb_last(v)]).filter(([,v])=>v!=null);
+      entries.sort((a,b)=>a[1]-b[1]);
+      const weakest = entries[0] ? `<b>${entries[0][0]}</b> (${hb_fmt(entries[0][1])})` : '—';
+      return `${sig} <b>${seg.label}</b> Manning: <b>${hb_fmt(curr)}</b> ${hb_dir(curr,prev)}<br>Weakest dept: ${weakest}`;
+    });
+  }
+
+  function hb_attrition(q, segments){
+    const periods = hb_extractPeriods(q);
+    if(periods.length>=2){
+      const metricKey = hb_metricFromQuery(q, 'attrition');
+      return hb_eachSegment(segments, (d, seg)=>{
+        const { arr, label, suf } = hb_metricSeries(d, metricKey);
+        if(!arr) return `<b>${seg.label}:</b> ${label} data unavailable.`;
+        const i1 = hb_findMonthIdx(d, periods[0]), i2 = hb_findMonthIdx(d, periods[1]);
+        if(i1===-1 || i2===-1) return `<b>${seg.label}:</b> "${periods[0]}" ya "${periods[1]}" data me nahi mila.`;
+        const v1 = arr[i1], v2 = arr[i2];
+        if(v1==null || v2==null) return `<b>${seg.label}:</b> ${label} for these periods not available.`;
+        const delta = Math.round((v1-v2)*100)/100;
+        return `<b>${seg.label}</b> — ${label}:<br>${d.months[i1]}: <b>${v1}${suf}</b> vs ${d.months[i2]}: <b>${v2}${suf}</b><br>Delta: <b>${delta>0?'+':''}${delta}${suf}</b> ${hb_dir(v1,v2)}`;
+      });
+    }
+    return hb_eachSegment(segments, (d, seg)=>{
+      const arr = d.attrition && d.attrition.total;
+      const i = hb_lastIdx(arr);
+      const curr = arr ? arr[i] : null, prev = hb_prevOf(arr,i);
+      const sig = curr==null ? 'ℹ️' : curr<=10 ? '✅' : curr<=20 ? '⚠️' : '🔴';
+      return `${sig} <b>${seg.label}</b> Total Attrition: <b>${hb_fmt(curr)}</b> ${hb_dir(curr,prev)} (prev: ${hb_fmt(prev)})`;
+    });
+  }
+
+  // ---------- main router ----------
+  function hb_answer(rawQ){
+    const q = rawQ.trim();
+    const ql = q.toLowerCase();
+    if(!(window.DATA||(typeof DATA!=='undefined' && DATA))){
+      return "⏳ Data abhi Google Sheet se load ho rahi hai. Thodi der me dobara try karo.";
+    }
+    const segments = hb_detectSegments(ql);
+    const periods = hb_extractPeriods(q);
+    if(periods.length>=2) return hb_attrition(ql, segments);
+
+    const intent = hb_detectIntent(ql);
+    switch(intent){
+      case 'help': return hb_help();
+      case 'summary': return hb_summary(segments);
+      case 'compare': return hb_compare(segments);
+      case 'tenure_attr': return hb_tenureAttr(segments);
+      case 'dept': return hb_dept(segments);
+      case 'voluntary': return hb_voluntary(segments);
+      case 'sourcing': return hb_sourcing(segments);
+      case 'onboarding': return hb_onboarding(segments);
+      case 'offer': return hb_offer(segments);
+      case 'headcount': return hb_headcount(segments);
+      case 'joining': return hb_joining(segments);
+      case 'trend': return hb_trend(ql, segments);
+      case 'manning': return hb_manning(segments);
+      case 'attrition': return hb_attrition(ql, segments);
+      default: return `🤔 Samajh nahi paya. Type <b>"help"</b> to dekho main kya kya bata sakta hoon.`;
+    }
+  }
+
+  // ---------- UI scaffolding (injected, doesn't touch existing DOM) ----------
+  const fab = document.createElement('button');
+  fab.id = 'hrbot-fab';
+  fab.textContent = '🤖';
+  fab.title = 'HR Pulse Assistant';
+
+  const panel = document.createElement('div');
+  panel.id = 'hrbot-panel';
+  panel.innerHTML = `
+    <div id="hrbot-header">
+      <div>HR Pulse Assistant 🤖<span class="sub">Live data se seedha jawaab</span></div>
+      <button id="hrbot-close">✕</button>
+    </div>
+    <div id="hrbot-messages"></div>
+    <div id="hrbot-chips">
+      <button class="hrbot-chip" data-q="Provide Attrition trend">Provide Attrition trend</button>
+      <button class="hrbot-chip" data-q="JFM'26 vs OND'25 compare">JFM'26 vs OND'25 compare</button>
+      <button class="hrbot-chip" data-q="Highest joinings ?">Highest joinings ?</button>
+      <button class="hrbot-chip" data-q="which dept is week?">which dept is week?</button>
+      <button class="hrbot-chip" data-q="Manning % latest">Manning % latest</button>
+      <button class="hrbot-chip" data-q="MP vs SaaS summary">MP vs SaaS summary</button>
+    </div>
+    <div id="hrbot-inputrow">
+      <input id="hrbot-input" type="text" placeholder="Apna sawal poochho... (e.g. attrition kaisa hai)" />
+      <button id="hrbot-send">Send</button>
+    </div>
+  `;
+
+  document.body.appendChild(panel);
+  document.body.appendChild(fab);
+
+  const messagesEl = panel.querySelector('#hrbot-messages');
+  function hb_addMsg(html, who){
+    const div = document.createElement('div');
+    div.className = 'hrbot-msg ' + who;
+    div.innerHTML = html;
+    messagesEl.appendChild(div);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+  function hb_showTyping(){
+    const div = document.createElement('div');
+    div.className = 'hrbot-typing';
+    div.id = 'hrbot-typing-indicator';
+    div.innerHTML = '<span></span><span></span><span></span>';
+    messagesEl.appendChild(div);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+  function hb_hideTyping(){
+    const el = document.getElementById('hrbot-typing-indicator');
+    if(el) el.remove();
+  }
+
+  function hb_ask(q){
+    if(!q || !q.trim()) return;
+    hb_addMsg(q.replace(/</g,'&lt;'), 'user');
+    hb_showTyping();
+    setTimeout(()=>{
+      hb_hideTyping();
+      let answer;
+      try{ answer = hb_answer(q); }
+      catch(e){ console.error('HR Pulse Assistant error', e); answer = '⚠️ Kuch error aa gaya jawaab dete waqt. Phir try karo.'; }
+      hb_addMsg(answer, 'bot');
+    }, 380);
+  }
+
+  fab.addEventListener('click', ()=>{
+    panel.classList.toggle('open');
+    if(panel.classList.contains('open') && !messagesEl.dataset.greeted){
+      messagesEl.dataset.greeted = '1';
+      hb_addMsg(`👋 Namaste! Main <b>HR Pulse Assistant</b> hoon. Manning, Attrition, Joining, Onboarding — kuch bhi poochho, live data se jawaab dunga.<br><br>Type <b>"help"</b> ya niche chips try karo.`, 'bot');
+    }
+  });
+  panel.querySelector('#hrbot-close').addEventListener('click', ()=> panel.classList.remove('open'));
+  panel.querySelector('#hrbot-send').addEventListener('click', ()=>{
+    const input = panel.querySelector('#hrbot-input');
+    hb_ask(input.value);
+    input.value = '';
+  });
+  panel.querySelector('#hrbot-input').addEventListener('keydown', (e)=>{
+    if(e.key === 'Enter'){
+      const input = e.target;
+      hb_ask(input.value);
+      input.value = '';
+    }
+  });
+  panel.querySelectorAll('.hrbot-chip').forEach(chip=>{
+    chip.addEventListener('click', ()=> hb_ask(chip.dataset.q));
+  });
+})();
+</script>
+<script>
+/* ===== AI Chatbot (appended — purely additive, reads the existing global DATA object) ===== */
+(function(){
+
+// ---------- DOM scaffold (injected at runtime so nothing in <body> needed editing) ----------
+document.body.insertAdjacentHTML('beforeend', `
+  <button id="hrbot-fab" title="Ask HR Pulse Bot">🤖</button>
+  <div id="hrbot-panel">
+    <div id="hrbot-header">
+      <div>🤖 HR Pulse Bot<span class="sub">Live data se direct jawab</span></div>
+      <button id="hrbot-close">✕</button>
+    </div>
+    <div id="hrbot-messages"></div>
+    <div id="hrbot-chips">
+      <button class="hrbot-chip" data-q="Provide Attrition trend">Provide Attrition trend</button>
+      <button class="hrbot-chip" data-q="JFM'26 vs OND'25 compare">JFM'26 vs OND'25 compare</button>
+      <button class="hrbot-chip" data-q="Highest joinings ?">Highest joinings ?</button>
+      <button class="hrbot-chip" data-q="which dept is week?">which dept is week?</button>
+      <button class="hrbot-chip" data-q="Manning % latest">Manning % latest</button>
+      <button class="hrbot-chip" data-q="MP vs SaaS summary">MP vs SaaS summary</button>
+    </div>
+    <div id="hrbot-inputrow">
+      <input id="hrbot-input" type="text" placeholder="Apna sawal type karo... (e.g. attrition trend)" />
+      <button id="hrbot-send">Send</button>
+    </div>
+  </div>
+`);
+
+const P_LABEL = { MP:'Marketplace', SaaS:'SaaS' };
+const L_LABEL = { MS:'Mid+Senior', E:'Entry' };
+
+// ---------- small local helpers (do NOT touch/override existing globals) ----------
+function hb_last(arr){ if(!arr) return null; for(let i=arr.length-1;i>=0;i--) if(arr[i]!=null) return arr[i]; return null; }
+function hb_lastIdx(arr){ if(!arr) return -1; for(let i=arr.length-1;i>=0;i--) if(arr[i]!=null) return i; return -1; }
+function hb_prevOf(arr,i){ if(!arr) return null; for(let k=i-1;k>=0;k--) if(arr[k]!=null) return arr[k]; return null; }
+function hb_fmt(v){ return v==null ? '—' : (Math.round(v*10)/10)+'%'; }
+function hb_dir(curr,prev){
+  if(curr==null||prev==null) return '➡️';
+  if(curr===prev) return '➡️';
+  return curr>prev ? '📈' : '📉';
+}
+function hb_norm(s){ return String(s||'').replace(/[^a-z0-9]/gi,'').toLowerCase(); }
+
+// ---------- segment detection ----------
+function detectSegments(q){
+  const t = q.toLowerCase();
+  let platforms = [];
+  let levels = [];
+  if(/\bmp\b|marketplace/.test(t)) platforms.push('MP');
+  if(/\bsaas\b/.test(t)) platforms.push('SaaS');
+  if(/\bentry\b/.test(t)) levels.push('E');
+  if(/\bms\b|\bmid\b|\bsenior\b|mid\+senior/.test(t)) levels.push('MS');
+  if(!platforms.length) platforms = ['MP','SaaS'];
+  if(!levels.length) levels = ['MS','E'];
+  const segments = [];
+  platforms.forEach(p => levels.forEach(l => segments.push({ p, l, label: P_LABEL[p]+' — '+L_LABEL[l] })));
+  return segments;
+}
+
+function hb_getDataset(p,l){
+  try{ return (typeof DATA !== 'undefined' && DATA) ? DATA[p][l] : null; }catch(e){ return null; }
+}
+
+function eachSegment(segments, fn){
+  const lines = segments.map(seg => {
+    const ds = hb_getDataset(seg.p, seg.l);
+    if(!ds) return `<b>${seg.label}:</b> data load nahi hui abhi, thoda wait karo.`;
+    return fn(ds, seg);
+  });
+  return lines.join('<br>');
+}
+
+// ---------- metric series lookup (Total dept, used for trend/quarter-compare) ----------
+function hb_metricSeries(ds, key){
+  switch(key){
+    case 'manning':    return { arr: ds.manning?.['Total'], label:'Manning %' };
+    case 'headcount':  return { arr: ds.hc?.['Total'], label:'Headcount' };
+    case 'joining':    return { arr: ds.joinings?.['Total'], label:'Joinings' };
+    case 'voluntary':  return { arr: ds.attrition?.voluntary, label:'Voluntary Attrition %' };
+    case 'offer':      return { arr: ds.offerJoin?.['Total'], label:'Offer→Join %' };
+    case 'attrition':
+    default:           return { arr: ds.attrition?.total, label:'Total Attrition %' };
+  }
+}
+
+function hb_metricKeywordFromQuery(t){
+  if(/manning/.test(t)) return 'manning';
+  if(/headcount|\bhc\b/.test(t)) return 'headcount';
+  if(/joining|hire/.test(t)) return 'joining';
+  if(/voluntary/.test(t)) return 'voluntary';
+  if(/offer/.test(t)) return 'offer';
+  return 'attrition'; // default focus, matches the "Provide Attrition trend" chip
+}
+
+// ---------- intent detection ----------
+const PERIOD_RE = /[A-Za-z]{2,4}'\d{2}/g;
+
+function detectIntent(t){
+  if(/help|madad|kya kya|what can you|commands/.test(t)) return 'help';
+  if(/summary|overall health|sehat|kaisa chal|health check/.test(t)) return 'summary';
+  if(/compare|\bvs\b|versus/.test(t)) return 'compare';
+  if(/24m|12-24|6-12|0-6|tenure|band/.test(t)) return 'tenure_attr';
+  if(/\bdept\b|department/.test(t)) return 'dept';
+  if(/voluntary/.test(t)) return 'voluntary';
+  if(/sourc|naukri|referral|linkedin/.test(t)) return 'sourcing';
+  if(/onboard|adherence|induction|market visit/.test(t)) return 'onboarding';
+  if(/offer/.test(t)) return 'offer';
+  if(/headcount|\bhc\b/.test(t)) return 'headcount';
+  if(/joining|hire|peak month/.test(t)) return 'joining';
+  if(/trend|monthly|month.?wise|trajectory/.test(t)) return 'trend';
+  if(/manning/.test(t)) return 'manning';
+  if(/attrition|attr\b/.test(t)) return 'attrition';
+  return 'fallback';
+}
+
+// ---------- answer builders ----------
+function ans_help(){
+  return `Main yeh sawal answer kar sakta hoon (live Google Sheet data se):<br>
+  • <b>attrition</b> — total attrition, quarter compare bhi (e.g. "JFM'26 vs OND'25")<br>
+  • <b>voluntary</b> — voluntary attrition %<br>
+  • <b>tenure</b> — 0-6M / 6-12M / 12-24M / 24M+ attrition bands<br>
+  • <b>manning</b> — latest Manning %, weakest dept<br>
+  • <b>headcount</b> — current HC vs start, trend<br>
+  • <b>joining</b> — joinings count, peak month<br>
+  • <b>offer</b> — Offer→Join %<br>
+  • <b>dept</b> — dept-wise attrition/manning sorted<br>
+  • <b>sourcing</b> — source mix, sourcing ratio<br>
+  • <b>onboarding</b> — adherence, induction, market visits<br>
+  • <b>trend</b> — month-by-month with 📈📉➡️<br>
+  • <b>compare</b> — MP vs SaaS table<br>
+  • <b>summary</b> — overall health ✅⚠️🔴<br><br>
+  Tip: "MP", "SaaS", "Entry", "MS/Mid/Senior" bolo to sirf usi segment ka jawab milega — warna sab 4 segments dikhenge.`;
+}
+
+function ans_quarterCompare(t, segments){
+  const tokensRaw = t.match(PERIOD_RE) || [];
+  const metricKey = hb_metricKeywordFromQuery(t);
+  return eachSegment(segments, (ds, seg) => {
+    const { arr, label } = hb_metricSeries(ds, metricKey);
+    if(!arr) return `<b>${seg.label}:</b> ${label} data nahi mili.`;
+    const findIdx = (tok) => ds.months.findIndex(m => hb_norm(m)===hb_norm(tok));
+    const i1 = findIdx(tokensRaw[0]); const i2 = findIdx(tokensRaw[1]);
+    if(i1===-1 || i2===-1) return `<b>${seg.label}:</b> "${tokensRaw[0]}" ya "${tokensRaw[1]}" months me nahi mile.`;
+    const v1 = arr[i1], v2 = arr[i2];
+    if(v1==null||v2==null) return `<b>${seg.label}:</b> us period ka data nahi hai.`;
+    const delta = Math.round((v1-v2)*100)/100;
+    return `<b>${seg.label}</b> — ${label}:<br>${ds.months[i1]}: <b>${v1}%</b> vs ${ds.months[i2]}: <b>${v2}%</b> ${hb_dir(v1,v2)}<br>Delta: <b>${delta>0?'+':''}${delta} pts</b>`;
+  });
+}
+
+function ans_attrition(t, segments){
+  const tokens = t.match(PERIOD_RE) || [];
+  if(tokens.length >= 2) return ans_quarterCompare(t, segments);
+  return eachSegment(segments, (ds, seg) => {
+    const arr = ds.attrition?.total;
+    const i = hb_lastIdx(arr);
+    const v = hb_last(arr); const prev = hb_prevOf(arr, i);
+    if(v==null) return `<b>${seg.label}:</b> attrition data nahi mila.`;
+    const cls = v<=10 ? '✅' : v<=20 ? '⚠️' : '🔴';
+    return `${cls} <b>${seg.label}</b> — Total Attrition: <b>${v}%</b> (${ds.months[i]}) ${hb_dir(v,prev)} prev: ${hb_fmt(prev)}`;
+  });
+}
+
+function ans_voluntary(segments){
+  return eachSegment(segments, (ds, seg) => {
+    const arr = ds.attrition?.voluntary;
+    const i = hb_lastIdx(arr);
+    const v = hb_last(arr); const prev = hb_prevOf(arr, i);
+    if(v==null) return `<b>${seg.label}:</b> voluntary attrition data nahi mila.`;
+    return `<b>${seg.label}</b> — Voluntary Attrition: <b>${v}%</b> (${ds.months[i]}) ${hb_dir(v,prev)}`;
+  });
+}
+
+function ans_tenure(segments){
+  return eachSegment(segments, (ds, seg) => {
+    const a = ds.attrition || {};
+    let rows;
+    if(a.t24){
+      rows = [['0-6M', hb_last(a.t0_6)], ['6-12M', hb_last(a.t6_12)], ['12-24M', hb_last(a.t12_24)], ['24M+', hb_last(a.t24)]];
+    } else {
+      rows = [['0-3M', hb_last(a.t0_3)], ['3-6M', hb_last(a.t3_6)], ['6-12M', hb_last(a.t6_12)], ['12M+', hb_last(a.t12p)]];
+    }
+    const line = rows.map(([lbl,v]) => `${lbl}: <b>${v==null?'—':v+'%'}</b>`).join(' | ');
+    return `<b>${seg.label}</b> — Tenure-wise Voluntary Attrition:<br>${line}`;
+  });
+}
+
+function ans_manning(segments){
+  return eachSegment(segments, (ds, seg) => {
+    const total = ds.manning?.['Total'];
+    const v = hb_last(total);
+    if(v==null) return `<b>${seg.label}:</b> manning data nahi mila.`;
+    let weakest=null, weakestVal=999;
+    Object.entries(ds.manning||{}).forEach(([k,arr]) => {
+      if(k==='Total') return;
+      const lv = hb_last(arr);
+      if(lv!=null && lv<weakestVal){ weakestVal=lv; weakest=k; }
+    });
+    const cls = v>=98 ? '✅' : '⚠️';
+    return `${cls} <b>${seg.label}</b> — Manning: <b>${v}%</b>` + (weakest ? ` | Weakest dept: <b>${weakest}</b> (${weakestVal}%)` : '');
+  });
+}
+
+function ans_headcount(segments){
+  return eachSegment(segments, (ds, seg) => {
+    const arr = ds.hc?.['Total'];
+    if(!arr) return `<b>${seg.label}:</b> headcount data nahi mila.`;
+    const curr = hb_last(arr);
+    const start = arr.find(v=>v!=null);
+    const i = hb_lastIdx(arr); const prev = hb_prevOf(arr,i);
+    if(curr==null) return `<b>${seg.label}:</b> headcount data nahi mila.`;
+    const pctChange = (start!=null && start!==0) ? Math.round(((curr-start)/start)*100) : null;
+    return `<b>${seg.label}</b> — Headcount: <b>${curr}</b> (start: ${start??'—'})` +
+      (pctChange!=null ? ` | Change: <b>${pctChange>0?'+':''}${pctChange}%</b>` : '') + ` ${hb_dir(curr,prev)}`;
+  });
+}
+
+function ans_joining(segments){
+  return eachSegment(segments, (ds, seg) => {
+    const arr = ds.joinings?.['Total'];
+    if(!arr) return `<b>${seg.label}:</b> joinings data nahi mila.`;
+    const total = arr.reduce((s,v)=>s+(v||0),0);
+    let peakIdx=-1, peakVal=-1;
+    arr.forEach((v,i)=>{ if(v!=null && v>peakVal){ peakVal=v; peakIdx=i; } });
+    const peakMonth = peakIdx>=0 ? ds.months[peakIdx] : '—';
+    return `<b>${seg.label}</b> — Total Joinings (all tracked months): <b>${total}</b> | Peak month: <b>${peakMonth}</b> (${peakVal>=0?peakVal:'—'})`;
+  });
+}
+
+function ans_offer(segments){
+  return eachSegment(segments, (ds, seg) => {
+    const arr = ds.offerJoin?.['Total'];
+    const i = hb_lastIdx(arr); const v = hb_last(arr); const prev = hb_prevOf(arr,i);
+    if(v==null) return `<b>${seg.label}:</b> Offer→Join data nahi mila.`;
+    const cls = v>=80 ? '✅' : '⚠️';
+    return `${cls} <b>${seg.label}</b> — Offer→Join: <b>${v}%</b> ${hb_dir(v,prev)}`;
+  });
+}
+
+function ans_onboarding(segments){
+  return eachSegment(segments, (ds, seg) => {
+    const adh = hb_last(ds.adherence);
+    const ic = hb_last(ds.inductionCross);
+    const ifn = hb_last(ds.inductionFunc);
+    const mv = hb_last(ds.marketVisits);
+    if(adh==null && ic==null && ifn==null && mv==null){
+      return `<b>${seg.label}:</b> onboarding metrics track nahi hote is level ke liye.`;
+    }
+    return `<b>${seg.label}</b>:<br>Adherence: <b>${hb_fmt(adh)}</b> | Cross-Func Induction: <b>${hb_fmt(ic)}</b> | Functional Induction: <b>${hb_fmt(ifn)}</b> | Market Visits: <b>${hb_fmt(mv)}</b>`;
+  });
+}
+
+function ans_sourcing(segments){
+  return eachSegment(segments, (ds, seg) => {
+    const ratio = hb_last(ds.sourcing?.['Total']);
+    const mix = hb_last(ds.sourceMix?.['Total']);
+    return `<b>${seg.label}</b> — Sourcing Ratio: <b>1:${ratio??'—'}</b> | Non-Referral Source Mix: <b>${hb_fmt(mix)}</b>`;
+  });
+}
+
+function ans_dept(segments){
+  return eachSegment(segments, (ds, seg) => {
+    const manningRows = Object.entries(ds.manning||{}).filter(([k])=>k!=='Total').map(([k,v])=>[k, hb_last(v)]).filter(([,v])=>v!=null).sort((a,b)=>a[1]-b[1]);
+    const attrRows = Object.entries(ds.attrition?.byDeptTotal||{}).filter(([k])=>k!=='Total').map(([k,v])=>[k, hb_last(v)]).filter(([,v])=>v!=null).sort((a,b)=>b[1]-a[1]);
+    let html = `<b>${seg.label}</b><br>`;
+    if(manningRows.length){
+      html += `<u>Manning % (lowest first):</u><br>` + manningRows.slice(0,5).map(([k,v])=>`${k}: <b>${v}%</b>`).join(' | ') + '<br>';
+    }
+    if(attrRows.length){
+      html += `<u>Attrition % (highest first):</u><br>` + attrRows.slice(0,5).map(([k,v])=>`${k}: <b>${v}%</b>`).join(' | ');
+    }
+    if(!manningRows.length && !attrRows.length) html += 'Dept-wise data nahi mila.';
+    return html;
+  });
+}
+
+function ans_trend(t, segments){
+  const metricKey = hb_metricKeywordFromQuery(t);
+  return eachSegment(segments, (ds, seg) => {
+    const { arr, label } = hb_metricSeries(ds, metricKey);
+    if(!arr) return `<b>${seg.label}:</b> ${label} data nahi mila.`;
+    const parts = ds.months.map((m,i) => {
+      if(arr[i]==null) return null;
+      const prev = hb_prevOf(arr,i);
+      const suf = (metricKey==='headcount'||metricKey==='joining') ? '' : '%';
+      return `${m}: <b>${arr[i]}${suf}</b> ${i>0?hb_dir(arr[i],prev):''}`;
+    }).filter(Boolean);
+    return `<b>${seg.label}</b> — ${label} trend:<br>` + parts.join(' → ');
+  });
+}
+
+function ans_compare(){
+  const levels = ['MS','E'];
+  let out = '';
+  levels.forEach(l => {
+    const mp = hb_getDataset('MP', l), saas = hb_getDataset('SaaS', l);
+    if(!mp || !saas) return;
+    out += `<b>MP vs SaaS — ${L_LABEL[l]}</b><table><tr><th>Metric</th><th>MP</th><th>SaaS</th></tr>`;
+    const rows = [
+      ['Manning %', hb_fmt(hb_last(mp.manning?.['Total'])), hb_fmt(hb_last(saas.manning?.['Total']))],
+      ['Headcount', hb_last(mp.hc?.['Total'])??'—', hb_last(saas.hc?.['Total'])??'—'],
+      ['Total Attrition %', hb_fmt(hb_last(mp.attrition?.total)), hb_fmt(hb_last(saas.attrition?.total))],
+      ['Offer→Join %', hb_fmt(hb_last(mp.offerJoin?.['Total'])), hb_fmt(hb_last(saas.offerJoin?.['Total']))],
+    ];
+    rows.forEach(([m,a,b]) => out += `<tr><td>${m}</td><td>${a}</td><td>${b}</td></tr>`);
+    out += '</table><br>';
+  });
+  return out || 'Data abhi load nahi hua.';
+}
+
+function ans_summary(segments){
+  return eachSegment(segments, (ds, seg) => {
+    const man = hb_last(ds.manning?.['Total']);
+    const attr = hb_last(ds.attrition?.total);
+    const off = hb_last(ds.offerJoin?.['Total']);
+    const adh = hb_last(ds.adherence);
+    function tag(v, goodMin, watchMin, lowerIsBetter){
+      if(v==null) return '⚪';
+      if(lowerIsBetter){ return v<=goodMin ? '✅' : v<=watchMin ? '⚠️' : '🔴'; }
+      return v>=goodMin ? '✅' : v>=watchMin ? '⚠️' : '🔴';
+    }
+    return `<b>${seg.label}</b><br>` +
+      `${tag(man,98,90,false)} Manning: <b>${hb_fmt(man)}</b> | ` +
+      `${tag(attr,10,20,true)} Attrition: <b>${hb_fmt(attr)}</b> | ` +
+      `${tag(off,80,60,false)} Offer→Join: <b>${hb_fmt(off)}</b>` +
+      (adh!=null ? ` | ${tag(adh,90,75,false)} Adherence: <b>${hb_fmt(adh)}</b>` : '');
+  });
+}
+
+function ans_fallback(){
+  return `Samajh nahi aaya 🤔. "help" type karo poori list dekhne ke liye, ya chips use karo niche.`;
+}
+
+// ---------- main router ----------
+function getAnswer(rawQuery){
+  if(typeof DATA === 'undefined' || !DATA){
+    return 'Live data abhi load ho rahi hai Google Sheet se — thoda wait karke phir try karo. 🙏';
+  }
+  const t = rawQuery.toLowerCase();
+  const segments = detectSegments(t);
+  const periodTokens = rawQuery.match(PERIOD_RE) || [];
+
+  if(periodTokens.length >= 2) return ans_quarterCompare(rawQuery, segments);
+
+  const intent = detectIntent(t);
+  switch(intent){
+    case 'help': return ans_help();
+    case 'summary': return ans_summary(segments);
+    case 'compare': return ans_compare();
+    case 'tenure_attr': return ans_tenure(segments);
+    case 'dept': return ans_dept(segments);
+    case 'voluntary': return ans_voluntary(segments);
+    case 'sourcing': return ans_sourcing(segments);
+    case 'onboarding': return ans_onboarding(segments);
+    case 'offer': return ans_offer(segments);
+    case 'headcount': return ans_headcount(segments);
+    case 'joining': return ans_joining(segments);
+    case 'trend': return ans_trend(rawQuery, segments);
+    case 'manning': return ans_manning(segments);
+    case 'attrition': return ans_attrition(rawQuery, segments);
+    default: return ans_fallback();
+  }
+}
+
+// ---------- UI wiring ----------
+const fab = document.getElementById('hrbot-fab');
+const panel = document.getElementById('hrbot-panel');
+const closeBtn = document.getElementById('hrbot-close');
+const messages = document.getElementById('hrbot-messages');
+const input = document.getElementById('hrbot-input');
+const sendBtn = document.getElementById('hrbot-send');
+const chips = document.getElementById('hrbot-chips');
+
+function addMsg(html, who){
+  const div = document.createElement('div');
+  div.className = 'hrbot-msg ' + who;
+  div.innerHTML = html;
+  messages.appendChild(div);
+  messages.scrollTop = messages.scrollHeight;
+}
+
+function showTyping(){
+  const div = document.createElement('div');
+  div.className = 'hrbot-typing';
+  div.id = 'hrbot-typing-indicator';
+  div.innerHTML = '<span></span><span></span><span></span>';
+  messages.appendChild(div);
+  messages.scrollTop = messages.scrollHeight;
+}
+function hideTyping(){ const el = document.getElementById('hrbot-typing-indicator'); if(el) el.remove(); }
+
+function askBot(q){
+  if(!q || !q.trim()) return;
+  addMsg(q.replace(/</g,'&lt;'), 'user');
+  input.value = '';
+  showTyping();
+  setTimeout(() => {
+    hideTyping();
+    let answer;
+    try{ answer = getAnswer(q); }catch(e){ console.error(e); answer = 'Kuch gadbad ho gayi 😅 phir try karo.'; }
+    addMsg(answer, 'bot');
+  }, 380);
+}
+
+fab.addEventListener('click', () => {
+  panel.classList.toggle('open');
+  if(panel.classList.contains('open') && !messages.childElementCount){
+    addMsg('Hi! 👋 Main aapke HR Pulse data se directly jawab deta hoon — Manning, Attrition, Joining, Offer→Join, sab kuch. Chips try karo ya type karo. "help" likhne se poori list milegi.', 'bot');
+  }
+});
+closeBtn.addEventListener('click', () => panel.classList.remove('open'));
+sendBtn.addEventListener('click', () => askBot(input.value));
+input.addEventListener('keydown', e => { if(e.key==='Enter') askBot(input.value); });
+chips.addEventListener('click', e => {
+  const btn = e.target.closest('.hrbot-chip');
+  if(btn) askBot(btn.dataset.q);
+});
+
+})();
 </script>
 </body>
 </html>
