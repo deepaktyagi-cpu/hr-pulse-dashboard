@@ -179,6 +179,21 @@ canvas{max-height:280px;}
     </div>
   </div>
 
+    <div class="card" id="card-exit-interviews">
+      <h3>Exit Interviews — Combined M+S (MP + SaaS)</h3>
+      <div class="note" style="margin-bottom:10px;">Live from MS_Exit_Interview sheet. Shown only for Mid+Senior level.</div>
+      <div id="exit-body">
+        <div class="kpis" id="exit-kpis"></div>
+        <div style="position:relative;height:220px;margin:14px 0;"><canvas id="chart-exit-trend"></canvas></div>
+        <div style="margin-bottom:14px;"><b style="font-size:12.5px;color:var(--sub);">Top recurring reasons:</b><br><div id="exit-reasons" style="margin-top:6px;"></div></div>
+        <div class="grid2">
+          <div><h4 style="font-size:13px;margin:0 0 8px;">Department-wise Exit Count</h4><div id="tbl-exit-dept"></div></div>
+          <div><h4 style="font-size:13px;margin:0 0 8px;">Most Recent Exits</h4><div id="tbl-exit-recent"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="page" id="page-p4">
     <div class="placeholder">
       <h2>💰 Cost Dashboard — Data Not Available</h2>
@@ -197,7 +212,125 @@ const SHEET_URLS = {
 };
 
 let DATA = null;
-let state = { platform:'MP', level:'MS', dept:'Total' };
+let EXIT_DATA = [];
+
+const EXIT_INTERVIEW_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSNRAuetb5fS3-xOe_J6MMM1wJm6jaEfGsNCgqVvDHdyOfYv8D8f06AFEaJMGEnCoDvB5Y1nlnz_vit/pub?gid=585161339&single=true&output=csv";
+
+const MONTH_IDX = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+function monthSortKey(label){
+  const m = String(label||'').match(/([A-Za-z]{3})'?(\d{2})/);
+  if(!m) return -1;
+  const mi = MONTH_IDX[m[1]] ?? -1;
+  return mi<0 ? -1 : parseInt(m[2],10)*12 + mi;
+}
+
+function parseExitInterviewCSV(text){
+  const rows = Papa.parse(text, {skipEmptyLines:true}).data;
+  let headerIdx = rows.findIndex(r => (r[0]||'').trim()==='Emp. Code');
+  if(headerIdx===-1) headerIdx = 0;
+  const records = [];
+  for(let r=headerIdx+1; r<rows.length; r++){
+    const row = rows[r];
+    const empCode = (row[0]||'').trim();
+    if(!empCode) continue;
+    const dept      = (row[2]||'').trim();
+    const month     = (row[3]||'').trim();
+    const tenure    = (row[4]||'').trim();
+    const ageBucket = (row[5]||'').trim();
+    const manager   = (row[6]||'').trim();
+    const exitType  = (row[7]||'').trim();
+    const hrRemarks = (row[15]||'').trim();
+    const analysisRaw = (row[16]||'').trim();
+    const analysis  = analysisRaw.split(/[,;\n]/).map(s=>s.trim()).filter(Boolean);
+    records.push({empCode, dept, month, tenure, ageBucket, manager, exitType, hrRemarks, analysis});
+  }
+  return records;
+}
+
+const EXIT_REASON_KEYWORDS = [
+  ['Company culture / work pressure','company culture'],
+  ['Limited learnings from manager','Limited Learnings'],
+  ['Better compensation outside','Better compensation'],
+  ['Limited growth/career path','Limited Growth'],
+  ['Role mismatch / lack of challenge','Role not meety'],
+  ['Relationship with supervisor','Relationship with supervisor'],
+];
+
+function aggregateExits(records){
+  const monthMap = new Map();
+  records.forEach(r=>{
+    if(!monthMap.has(r.month)) monthMap.set(r.month, {Voluntary:0,Involuntary:0,Movement:0});
+    const bucket = monthMap.get(r.month);
+    if(bucket[r.exitType]!=null) bucket[r.exitType]++;
+  });
+  const months = Array.from(monthMap.keys()).sort((a,b)=>monthSortKey(a)-monthSortKey(b));
+  const deptCounts = new Map();
+  records.forEach(r=>{ deptCounts.set(r.dept, (deptCounts.get(r.dept)||0)+1); });
+  const reasonCounts = EXIT_REASON_KEYWORDS.map(([label,kw])=>{
+    const count = records.filter(r => r.analysis.some(a => a.toLowerCase().includes(kw.toLowerCase()))).length;
+    return {label, count};
+  }).sort((a,b)=>b.count-a.count);
+  return {months, monthMap, deptCounts, reasonCounts};
+}
+
+function renderExitInterviews(){
+  const card = document.getElementById('card-exit-interviews');
+  if(state.level !== 'MS'){ card.style.display='none'; return; }
+  card.style.display = 'block';
+  if(!EXIT_DATA||!EXIT_DATA.length){
+    document.getElementById('exit-body').innerHTML = '<div class="placeholder">Exit interview live data unavailable.</div>';
+    return;
+  }
+  const agg = aggregateExits(EXIT_DATA);
+  const totalCount  = EXIT_DATA.length;
+  const volCount    = EXIT_DATA.filter(r=>r.exitType==='Voluntary').length;
+  const involCount  = EXIT_DATA.filter(r=>r.exitType==='Involuntary').length;
+  const moveCount   = EXIT_DATA.filter(r=>r.exitType==='Movement').length;
+  const latestMonth = agg.months[agg.months.length-1];
+  const latestMonthCount = latestMonth ? EXIT_DATA.filter(r=>r.month===latestMonth).length : 0;
+
+  document.getElementById('exit-kpis').innerHTML = [
+    kpiCard('Total Exit Interviews (all-time)', totalCount, '', 'Combined M+S, MP+SaaS'),
+    kpiCard('This Month'+(latestMonth?` (${latestMonth})`:''), latestMonthCount),
+    kpiCard('Voluntary / Involuntary', `${volCount} / ${involCount}`),
+    kpiCard('Internal Movement', moveCount)
+  ].join('');
+
+  const volSeries  = agg.months.map(m=>agg.monthMap.get(m).Voluntary);
+  const involSeries= agg.months.map(m=>agg.monthMap.get(m).Involuntary);
+  const moveSeries = agg.months.map(m=>agg.monthMap.get(m).Movement);
+  destroyChart('chart-exit-trend');
+  charts['chart-exit-trend'] = new Chart(document.getElementById('chart-exit-trend').getContext('2d'),{
+    type:'bar',
+    data:{labels:agg.months, datasets:[
+      {label:'Voluntary',   data:volSeries,   backgroundColor:palette[2]},
+      {label:'Involuntary', data:involSeries, backgroundColor:palette[4]},
+      {label:'Movement',    data:moveSeries,  backgroundColor:palette[0]},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      scales:{x:{stacked:true,ticks:{font:{size:10}}},y:{stacked:true,beginAtZero:true,ticks:{font:{size:10}}}},
+      plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:11}}}}}
+  });
+
+  document.getElementById('exit-reasons').innerHTML = agg.reasonCounts.filter(r=>r.count>0).map(r=>
+    `<span style="background:#fde8e6;color:#e0473e;font-weight:700;font-size:11.5px;padding:5px 10px;border-radius:14px;margin:3px;display:inline-block;">${r.label} · ${r.count}</span>`
+  ).join('') || '<span class="note">No recurring reason categories matched.</span>';
+
+  const deptSorted = Array.from(agg.deptCounts.entries()).sort((a,b)=>b[1]-a[1]).slice(0,12);
+  let deptHtml = '<table><thead><tr><th>Dept</th><th>Exit Count</th></tr></thead><tbody>';
+  deptSorted.forEach(([dept,count])=>{ deptHtml += `<tr><td>${dept}</td><td>${count}</td></tr>`; });
+  deptHtml += '</tbody></table>';
+  document.getElementById('tbl-exit-dept').innerHTML = deptHtml;
+
+  const sorted = [...EXIT_DATA].sort((a,b)=>monthSortKey(b.month)-monthSortKey(a.month));
+  let recHtml = '<table><thead><tr><th>Month</th><th>Dept</th><th>Manager</th><th>Tenure</th><th>Type</th><th>Top Reason</th></tr></thead><tbody>';
+  sorted.slice(0,12).forEach(r=>{
+    const typeColor = r.exitType==='Voluntary'?'#d98c0e':r.exitType==='Involuntary'?'#e0473e':'#2f5fff';
+    recHtml += `<tr ${r.exitType==='Involuntary'?'style="background:#fff3df;"':''}><td>${r.month}</td><td>${r.dept}</td><td>${r.manager}</td><td>${r.tenure}</td><td><span style="color:${typeColor};font-weight:700;">${r.exitType}</span></td><td style="text-align:left;font-size:11.5px;">${r.analysis[0]||'—'}</td></tr>`;
+  });
+  recHtml += '</tbody></table>';
+  document.getElementById('tbl-exit-recent').innerHTML = recHtml;
+}
 let charts = {};
 
 function parseNum(v){
@@ -334,6 +467,11 @@ async function loadAllData(){
     const built = {};
     keys.forEach((k,i)=>{ built[k] = buildDataset(parseSheetCSV(texts[i])); });
     DATA = { MP:{ MS: built.MP_MS, E: built.MP_E }, SaaS:{ MS: built.SaaS_MS, E: built.SaaS_E } };
+    // Fetch exit interviews
+    try{
+      const exitText = await fetch(EXIT_INTERVIEW_URL+'&_ts='+Date.now()).then(r=>r.text());
+      EXIT_DATA = parseExitInterviewCSV(exitText);
+    }catch(e){ console.error('Exit interview fetch failed', e); EXIT_DATA = []; }
     document.getElementById('statusPill').textContent = '● Live — connected to Google Sheet';
     document.getElementById('statusPill').className = 'statuspill live';
     renderAll();
@@ -593,6 +731,7 @@ function renderPage3(){
 
   const selectedMetric = populateAttrMetricSelect();
   if(selectedMetric) renderAttrHeatmap(selectedMetric);
+  renderExitInterviews();
 }
 
 function renderOverview(){
@@ -722,37 +861,18 @@ document.getElementById('pageNav').addEventListener('click',e=>{
 loadAllData();
 </script>
 
-<!-- ═══════════════════════════════════════════════════════
-     HR PULSE — ASK AI  (Zero API · Pure JS · Live Data)
-     ═══════════════════════════════════════════════════════ -->
+<!-- ═══════════════════════════ HR PULSE — ASK AI (Zero API · Pure JS) ═══════════════════════════ -->
 <style>
-#hrbot-fab{
-  position:fixed;bottom:24px;right:24px;width:56px;height:56px;border-radius:50%;
-  background:var(--blue);color:#fff;border:none;font-size:24px;cursor:pointer;
-  box-shadow:0 6px 20px rgba(47,95,255,.45);z-index:9999;
-  display:flex;align-items:center;justify-content:center;transition:transform .15s;
-}
+#hrbot-fab{position:fixed;bottom:24px;right:24px;width:56px;height:56px;border-radius:50%;background:var(--blue);color:#fff;border:none;font-size:24px;cursor:pointer;box-shadow:0 6px 20px rgba(47,95,255,.45);z-index:9999;display:flex;align-items:center;justify-content:center;transition:transform .15s;}
 #hrbot-fab:hover{transform:scale(1.08);}
-#hrbot-panel{
-  position:fixed;bottom:90px;right:24px;width:390px;max-width:calc(100vw - 32px);
-  background:var(--card);border:1px solid var(--border);border-radius:16px;
-  box-shadow:0 12px 40px rgba(0,0,0,.18);z-index:9999;
-  flex-direction:column;overflow:hidden;display:none;
-}
+#hrbot-panel{position:fixed;bottom:90px;right:24px;width:390px;max-width:calc(100vw - 32px);background:var(--card);border:1px solid var(--border);border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.18);z-index:9999;flex-direction:column;overflow:hidden;display:none;}
 #hrbot-panel.open{display:flex;}
-#hrbot-header{
-  background:var(--ink);color:#fff;padding:13px 16px;
-  display:flex;align-items:center;justify-content:space-between;
-}
+#hrbot-header{background:var(--ink);color:#fff;padding:13px 16px;display:flex;align-items:center;justify-content:space-between;}
 #hrbot-header .htitle{font-weight:800;font-size:14px;}
 #hrbot-header .hsub{font-size:11px;color:#aab2c5;margin-top:2px;}
 #hrbot-close{background:none;border:none;color:#fff;font-size:20px;cursor:pointer;opacity:.8;line-height:1;}
 #hrbot-close:hover{opacity:1;}
-#hrbot-messages{
-  max-height:310px;min-height:160px;overflow-y:auto;
-  padding:14px;display:flex;flex-direction:column;gap:10px;
-  background:var(--bg);
-}
+#hrbot-messages{max-height:310px;min-height:160px;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;background:var(--bg);}
 .hb-msg{font-size:13px;line-height:1.5;padding:9px 12px;border-radius:12px;max-width:88%;}
 .hb-msg.bot{background:var(--card);border:1px solid var(--border);color:var(--ink);align-self:flex-start;border-bottom-left-radius:4px;}
 .hb-msg.user{background:var(--blue);color:#fff;align-self:flex-end;border-bottom-right-radius:4px;}
@@ -760,8 +880,7 @@ loadAllData();
 .hb-msg th,.hb-msg td{padding:4px 7px;border-bottom:1px solid var(--border);text-align:left;}
 .hb-typing{display:flex;gap:4px;align-self:flex-start;padding:10px 14px;background:var(--card);border:1px solid var(--border);border-radius:12px;border-bottom-left-radius:4px;}
 .hb-typing span{width:6px;height:6px;border-radius:50%;background:var(--sub);display:inline-block;animation:hbounce 1s infinite ease-in-out;}
-.hb-typing span:nth-child(2){animation-delay:.15s;}
-.hb-typing span:nth-child(3){animation-delay:.3s;}
+.hb-typing span:nth-child(2){animation-delay:.15s;}.hb-typing span:nth-child(3){animation-delay:.3s;}
 @keyframes hbounce{0%,80%,100%{transform:translateY(0);opacity:.4;}40%{transform:translateY(-4px);opacity:1;}}
 #hrbot-chips{display:flex;flex-wrap:wrap;gap:6px;padding:10px 14px;border-top:1px solid var(--border);background:var(--card);}
 .hb-chip{border:1px solid var(--blue);background:#fff;color:var(--blue);font-size:11px;font-weight:700;padding:5px 10px;border-radius:14px;cursor:pointer;white-space:nowrap;}
@@ -777,10 +896,7 @@ loadAllData();
 <button id="hrbot-fab">🤖</button>
 <div id="hrbot-panel">
   <div id="hrbot-header">
-    <div>
-      <div class="htitle">🤖 HR Pulse Assistant</div>
-      <div class="hsub">Live data se seedha jawab · Zero API · Free</div>
-    </div>
+    <div><div class="htitle">🤖 HR Pulse Assistant</div><div class="hsub">Live data se seedha jawab · Zero API · Free</div></div>
     <button id="hrbot-close">✕</button>
   </div>
   <div id="hrbot-messages"></div>
@@ -795,25 +911,21 @@ loadAllData();
     <button class="hb-chip" data-q="help">Help</button>
   </div>
   <div id="hrbot-inputrow">
-    <input id="hrbot-input" type="text" placeholder="Sawaal likho… (e.g. JFM'26 attrition kaisi thi?)" autocomplete="off"/>
+    <input id="hrbot-input" type="text" placeholder="Sawaal likho… (e.g. JFM'26 attrition?)" autocomplete="off"/>
     <button id="hrbot-send">Send</button>
   </div>
 </div>
 
 <script>
 (function(){
-  /* ── Tiny helpers ─────────────────────────────────────────── */
   function hLast(a){if(!a)return null;for(let i=a.length-1;i>=0;i--)if(a[i]!=null)return a[i];return null;}
   function hLastIdx(a){if(!a)return -1;for(let i=a.length-1;i>=0;i--)if(a[i]!=null)return i;return -1;}
   function hPrev(a,i){if(!a)return null;for(let k=i-1;k>=0;k--)if(a[k]!=null)return a[k];return null;}
   function hFmt(v,s='%'){return v==null?'—':(Math.round(v*10)/10)+s;}
   function hDir(c,p){if(c==null||p==null||c===p)return'➡️';return c>p?'📈':'📉';}
   function hDS(p,l){try{return DATA[p][l];}catch(e){return null;}}
+  const PL={MP:'Marketplace',SaaS:'SaaS'}, LL={MS:'Mid+Senior',E:'Entry'};
 
-  const PL={MP:'Marketplace',SaaS:'SaaS'};
-  const LL={MS:'Mid+Senior',E:'Entry'};
-
-  /* ── Segment detection ────────────────────────────────────── */
   function segs(q){
     const t=q.toLowerCase();
     let pp=[],ll=[];
@@ -827,45 +939,25 @@ loadAllData();
     pp.forEach(p=>ll.forEach(l=>out.push({p,l,lbl:PL[p]+' · '+LL[l]})));
     return out;
   }
-
-  /* ── Each segment loop ────────────────────────────────────── */
-  function each(ss,fn){
-    return ss.map(s=>{
-      const d=hDS(s.p,s.l);
-      if(!d)return`<b>${s.lbl}:</b> data abhi load ho rahi hai…`;
-      return fn(d,s);
-    }).join('<br><br>');
-  }
-
-  /* ── Period tokens (e.g. JFM'26) ─────────────────────────── */
+  function each(ss,fn){return ss.map(s=>{const d=hDS(s.p,s.l);if(!d)return`<b>${s.lbl}:</b> data load ho rahi hai…`;return fn(d,s);}).join('<br><br>');}
   function periods(q){return q.match(/[A-Za-z]{2,4}'\d{2}/g)||[];}
-  function findMonthIdx(d,tok){
-    const norm=s=>String(s).replace(/[^a-z0-9]/gi,'').toLowerCase();
-    return d.months.findIndex(m=>norm(m)===norm(tok));
-  }
-
-  /* ── Metric series picker ─────────────────────────────────── */
-  function metricSeries(d,key){
+  function findIdx(d,tok){const n=s=>String(s).replace(/[^a-z0-9]/gi,'').toLowerCase();return d.months.findIndex(m=>n(m)===n(tok));}
+  function mSeries(d,key){
     const map={
-      manning:   {a:d.manning?.Total,          l:'Manning %',            suf:'%'},
-      headcount: {a:d.hc?.Total,               l:'Headcount',            suf:''},
-      joining:   {a:d.joinings?.Total,          l:'Joinings',             suf:''},
-      voluntary: {a:d.attrition?.voluntary,     l:'Voluntary Attrition %',suf:'%'},
-      offer:     {a:d.offerJoin?.Total,         l:'Offer→Join %',         suf:'%'},
-      attrition: {a:d.attrition?.total,         l:'Total Attrition %',    suf:'%'},
+      manning:   {a:d.manning?.Total,          l:'Manning %',             suf:'%'},
+      headcount: {a:d.hc?.Total,               l:'Headcount',             suf:''},
+      joining:   {a:d.joinings?.Total,          l:'Joinings',              suf:''},
+      voluntary: {a:d.attrition?.voluntary,     l:'Voluntary Attrition %', suf:'%'},
+      offer:     {a:d.offerJoin?.Total,         l:'Offer→Join %',          suf:'%'},
+      attrition: {a:d.attrition?.total,         l:'Total Attrition %',     suf:'%'},
     };
     return map[key]||map.attrition;
   }
-  function metricKey(t){
-    if(/manning/.test(t))return'manning';
-    if(/headcount|\bhc\b/.test(t))return'headcount';
-    if(/joining|hire/.test(t))return'joining';
-    if(/voluntary/.test(t))return'voluntary';
-    if(/offer/.test(t))return'offer';
-    return'attrition';
+  function mKey(t){
+    if(/manning/.test(t))return'manning';if(/headcount|\bhc\b/.test(t))return'headcount';
+    if(/joining|hire/.test(t))return'joining';if(/voluntary/.test(t))return'voluntary';
+    if(/offer/.test(t))return'offer';return'attrition';
   }
-
-  /* ── Intent detection ─────────────────────────────────────── */
   function intent(t){
     if(/help|madad|kya kya/.test(t))return'help';
     if(/summary|overall|health|sehat/.test(t))return'summary';
@@ -884,208 +976,38 @@ loadAllData();
     return'unknown';
   }
 
-  /* ══ ANSWER BUILDERS ══════════════════════════════════════════ */
+  function aHelp(){return`<b>🤖 Yeh sawaal pooch sakte ho:</b><br>• <b>Attrition</b> — "JFM'26 vs OND'25 compare"<br>• <b>Voluntary</b> — "voluntary attrition kitna"<br>• <b>Tenure</b> — "0-6M / 24M+ band"<br>• <b>Manning</b> — "manning % latest"<br>• <b>Headcount</b> — "headcount trend"<br>• <b>Joining</b> — "peak joining month"<br>• <b>Offer→Join</b> — "offer to join %"<br>• <b>Dept</b> — "which dept is weak"<br>• <b>Compare</b> — "MP vs SaaS"<br>• <b>Summary</b> — "overall health"<br>• <b>Onboarding</b> — "adherence / market visits"<br>• <b>Sourcing</b> — "source mix"<br>• <b>Trend</b> — "attrition trend month wise"<br><br>💡 <i>"MP","SaaS","Entry","MS" bolo to sirf usi segment ka jawab milega</i>`;}
 
-  function aHelp(){
-    return`<b>🤖 Yeh sawal pooch sakte ho:</b><br>
-• <b>Attrition</b> — "attrition kya hai", "JFM'26 vs OND'25 compare"<br>
-• <b>Voluntary</b> — "voluntary attrition kitna"<br>
-• <b>Tenure</b> — "0-6M / 24M+ attrition band"<br>
-• <b>Manning</b> — "manning % latest", "weakest dept"<br>
-• <b>Headcount</b> — "headcount trend"<br>
-• <b>Joining</b> — "peak joining month"<br>
-• <b>Offer→Join</b> — "offer to join %"<br>
-• <b>Dept</b> — "which dept is weak"<br>
-• <b>Compare</b> — "MP vs SaaS"<br>
-• <b>Summary</b> — "overall health"<br>
-• <b>Onboarding</b> — "adherence", "market visits"<br>
-• <b>Sourcing</b> — "source mix"<br>
-• <b>Trend</b> — "attrition trend month wise"<br><br>
-💡 <i>"MP", "SaaS", "Entry", "MS" bolo to sirf usi segment ka jawab milega</i>`;
-  }
+  function aSummary(ss){return each(ss,(d,s)=>{
+    const man=hLast(d.manning?.Total),att=hLast(d.attrition?.total),off=hLast(d.offerJoin?.Total),adh=hLast(d.adherence);
+    const f=(v,g,w,low)=>v==null?'⚪':low?(v<=g?'✅':v<=w?'⚠️':'🔴'):(v>=g?'✅':v>=w?'⚠️':'🔴');
+    return`<b>${s.lbl}</b><br>${f(man,98,90,false)} Manning: <b>${hFmt(man)}</b> &nbsp;|&nbsp; ${f(att,10,20,true)} Attrition: <b>${hFmt(att)}</b><br>${f(off,80,60,false)} Offer→Join: <b>${hFmt(off)}</b> &nbsp;|&nbsp; ${f(adh,90,75,false)} Adherence: <b>${hFmt(adh)}</b>`;
+  });}
 
-  function aSummary(ss){
-    return each(ss,(d,s)=>{
-      const man=hLast(d.manning?.Total);
-      const att=hLast(d.attrition?.total);
-      const off=hLast(d.offerJoin?.Total);
-      const adh=hLast(d.adherence);
-      const f=(v,g,w,low)=>v==null?'⚪':low?(v<=g?'✅':v<=w?'⚠️':'🔴'):(v>=g?'✅':v>=w?'⚠️':'🔴');
-      return`<b>${s.lbl}</b><br>
-${f(man,98,90,false)} Manning: <b>${hFmt(man)}</b> &nbsp;|&nbsp;
-${f(att,10,20,true)} Attrition: <b>${hFmt(att)}</b><br>
-${f(off,80,60,false)} Offer→Join: <b>${hFmt(off)}</b>&nbsp;|&nbsp;
-${f(adh,90,75,false)} Adherence: <b>${hFmt(adh)}</b>`;
-    });
-  }
+  function aCompare(){let out='';['MS','E'].forEach(l=>{const mp=hDS('MP',l),ss=hDS('SaaS',l);if(!mp||!ss)return;out+=`<b>MP vs SaaS — ${LL[l]}</b><table><tr><th>Metric</th><th>MP</th><th>SaaS</th></tr><tr><td>Manning %</td><td>${hFmt(hLast(mp.manning?.Total))}</td><td>${hFmt(hLast(ss.manning?.Total))}</td></tr><tr><td>Headcount</td><td>${hLast(mp.hc?.Total)??'—'}</td><td>${hLast(ss.hc?.Total)??'—'}</td></tr><tr><td>Total Attrition %</td><td>${hFmt(hLast(mp.attrition?.total))}</td><td>${hFmt(hLast(ss.attrition?.total))}</td></tr><tr><td>Voluntary %</td><td>${hFmt(hLast(mp.attrition?.voluntary))}</td><td>${hFmt(hLast(ss.attrition?.voluntary))}</td></tr><tr><td>Offer→Join %</td><td>${hFmt(hLast(mp.offerJoin?.Total))}</td><td>${hFmt(hLast(ss.offerJoin?.Total))}</td></tr><tr><td>Joinings (latest)</td><td>${hLast(mp.joinings?.Total)??'—'}</td><td>${hLast(ss.joinings?.Total)??'—'}</td></tr></table><br>`;});return out||'Data load nahi hua abhi.';}
 
-  function aCompare(){
-    let out='';
-    ['MS','E'].forEach(l=>{
-      const mp=hDS('MP',l),ss=hDS('SaaS',l);
-      if(!mp||!ss)return;
-      out+=`<b>MP vs SaaS — ${LL[l]}</b>
-<table>
-<tr><th>Metric</th><th>MP</th><th>SaaS</th></tr>
-<tr><td>Manning %</td><td>${hFmt(hLast(mp.manning?.Total))}</td><td>${hFmt(hLast(ss.manning?.Total))}</td></tr>
-<tr><td>Headcount</td><td>${hLast(mp.hc?.Total)??'—'}</td><td>${hLast(ss.hc?.Total)??'—'}</td></tr>
-<tr><td>Total Attrition %</td><td>${hFmt(hLast(mp.attrition?.total))}</td><td>${hFmt(hLast(ss.attrition?.total))}</td></tr>
-<tr><td>Voluntary Attrition %</td><td>${hFmt(hLast(mp.attrition?.voluntary))}</td><td>${hFmt(hLast(ss.attrition?.voluntary))}</td></tr>
-<tr><td>Offer→Join %</td><td>${hFmt(hLast(mp.offerJoin?.Total))}</td><td>${hFmt(hLast(ss.offerJoin?.Total))}</td></tr>
-<tr><td>Joinings (latest)</td><td>${hLast(mp.joinings?.Total)??'—'}</td><td>${hLast(ss.joinings?.Total)??'—'}</td></tr>
-</table><br>`;
-    });
-    return out||'Data load nahi hua abhi.';
-  }
+  function aTenure(ss){return each(ss,(d,s)=>{const a=d.attrition||{};const rows=a.t24?[['0-6M',hLast(a.t0_6)],['6-12M',hLast(a.t6_12)],['12-24M',hLast(a.t12_24)],['24M+',hLast(a.t24)]]:[['0-3M',hLast(a.t0_3)],['3-6M',hLast(a.t3_6)],['6-12M',hLast(a.t6_12)],['12M+',hLast(a.t12p)]];const sig=v=>v==null?'⚪':v<=10?'✅':v<=20?'⚠️':'🔴';return`<b>${s.lbl}</b> — Tenure-wise Voluntary Attrition:<br>`+rows.map(([l,v])=>`${sig(v)} ${l}: <b>${hFmt(v)}</b>`).join(' &nbsp;|&nbsp; ');});}
 
-  function aTenure(ss){
-    return each(ss,(d,s)=>{
-      const a=d.attrition||{};
-      const rows=a.t24
-        ?[['0-6M',hLast(a.t0_6)],['6-12M',hLast(a.t6_12)],['12-24M',hLast(a.t12_24)],['24M+',hLast(a.t24)]]
-        :[['0-3M',hLast(a.t0_3)],['3-6M',hLast(a.t3_6)],['6-12M',hLast(a.t6_12)],['12M+',hLast(a.t12p)]];
-      const sig=v=>v==null?'⚪':v<=10?'✅':v<=20?'⚠️':'🔴';
-      return`<b>${s.lbl}</b> — Tenure-wise Voluntary Attrition:<br>`+
-        rows.map(([l,v])=>`${sig(v)} ${l}: <b>${hFmt(v)}</b>`).join(' &nbsp;|&nbsp; ');
-    });
-  }
-
-  function aDept(ss){
-    return each(ss,(d,s)=>{
-      const manRows=Object.entries(d.manning||{}).filter(([k])=>k!=='Total')
-        .map(([k,v])=>[k,hLast(v)]).filter(([,v])=>v!=null).sort((a,b)=>a[1]-b[1]);
-      const attRows=Object.entries(d.attrition?.byDeptTotal||{}).filter(([k])=>k!=='Total')
-        .map(([k,v])=>[k,hLast(v)]).filter(([,v])=>v!=null).sort((a,b)=>b[1]-a[1]);
-      let html=`<b>${s.lbl}</b><br>`;
-      if(manRows.length) html+=`<u>Manning % (worst first):</u><br>`+manRows.slice(0,5).map(([k,v])=>`${v<90?'🔴':'⚠️'} ${k}: <b>${v}%</b>`).join('<br>')+'<br>';
-      if(attRows.length) html+=`<u>Attrition % (highest first):</u><br>`+attRows.slice(0,5).map(([k,v])=>`${v>=10?'🔴':v>=5?'⚠️':'✅'} ${k}: <b>${v}%</b>`).join('<br>');
-      if(!manRows.length&&!attRows.length) html+='Data nahi mila.';
-      return html;
-    });
-  }
+  function aDept(ss){return each(ss,(d,s)=>{const mr=Object.entries(d.manning||{}).filter(([k])=>k!=='Total').map(([k,v])=>[k,hLast(v)]).filter(([,v])=>v!=null).sort((a,b)=>a[1]-b[1]);const ar=Object.entries(d.attrition?.byDeptTotal||{}).filter(([k])=>k!=='Total').map(([k,v])=>[k,hLast(v)]).filter(([,v])=>v!=null).sort((a,b)=>b[1]-a[1]);let h=`<b>${s.lbl}</b><br>`;if(mr.length)h+=`<u>Manning % (worst first):</u><br>`+mr.slice(0,5).map(([k,v])=>`${v<90?'🔴':'⚠️'} ${k}: <b>${v}%</b>`).join('<br>')+'<br>';if(ar.length)h+=`<u>Attrition % (highest first):</u><br>`+ar.slice(0,5).map(([k,v])=>`${v>=10?'🔴':v>=5?'⚠️':'✅'} ${k}: <b>${v}%</b>`).join('<br>');return h;});}
 
   function aAttrition(q,ss){
     const pp=periods(q);
-    if(pp.length>=2){
-      const mk=metricKey(q.toLowerCase());
-      return each(ss,(d,s)=>{
-        const {a,l,suf}=metricSeries(d,mk);
-        if(!a)return`<b>${s.lbl}:</b> ${l} data nahi mili.`;
-        const i1=findMonthIdx(d,pp[0]),i2=findMonthIdx(d,pp[1]);
-        if(i1<0||i2<0)return`<b>${s.lbl}:</b> "${pp[0]}" ya "${pp[1]}" months mein nahi mila.`;
-        const v1=a[i1],v2=a[i2];
-        if(v1==null||v2==null)return`<b>${s.lbl}:</b> us period ka data nahi.`;
-        const delta=Math.round((v1-v2)*100)/100;
-        return`<b>${s.lbl}</b> — ${l}:<br>
-${d.months[i1]}: <b>${v1}${suf}</b> &nbsp;→&nbsp; ${d.months[i2]}: <b>${v2}${suf}</b> ${hDir(v1,v2)}<br>
-Delta: <b>${delta>0?'+':''}${delta}${suf}</b>`;
-      });
-    }
-    return each(ss,(d,s)=>{
-      const arr=d.attrition?.total;
-      const i=hLastIdx(arr);const v=hLast(arr);const pr=hPrev(arr,i);
-      if(v==null)return`<b>${s.lbl}:</b> attrition data nahi mila.`;
-      const sig=v<=10?'✅':v<=20?'⚠️':'🔴';
-      return`${sig} <b>${s.lbl}</b> — Total Attrition: <b>${v}%</b> (${d.months[i]}) ${hDir(v,pr)}<br>Prev: ${hFmt(pr)}`;
-    });
+    if(pp.length>=2){const mk=mKey(q.toLowerCase());return each(ss,(d,s)=>{const{a,l,suf}=mSeries(d,mk);if(!a)return`<b>${s.lbl}:</b> data nahi.`;const i1=findIdx(d,pp[0]),i2=findIdx(d,pp[1]);if(i1<0||i2<0)return`<b>${s.lbl}:</b> "${pp[0]}" ya "${pp[1]}" nahi mila.`;const v1=a[i1],v2=a[i2];if(v1==null||v2==null)return`<b>${s.lbl}:</b> data nahi.`;const delta=Math.round((v1-v2)*100)/100;return`<b>${s.lbl}</b> — ${l}:<br>${d.months[i1]}: <b>${v1}${suf}</b> → ${d.months[i2]}: <b>${v2}${suf}</b> ${hDir(v1,v2)}<br>Delta: <b>${delta>0?'+':''}${delta}${suf}</b>`;});}
+    return each(ss,(d,s)=>{const arr=d.attrition?.total;const i=hLastIdx(arr);const v=hLast(arr);const pr=hPrev(arr,i);if(v==null)return`<b>${s.lbl}:</b> attrition data nahi.`;const sig=v<=10?'✅':v<=20?'⚠️':'🔴';return`${sig} <b>${s.lbl}</b> — Total Attrition: <b>${v}%</b> (${d.months[i]}) ${hDir(v,pr)}<br>Prev: ${hFmt(pr)}`;});
   }
 
-  function aVoluntary(ss){
-    return each(ss,(d,s)=>{
-      const arr=d.attrition?.voluntary;
-      const i=hLastIdx(arr);const v=hLast(arr);const pr=hPrev(arr,i);
-      if(v==null)return`<b>${s.lbl}:</b> voluntary data nahi mila.`;
-      const sig=v<=8?'✅':v<=15?'⚠️':'🔴';
-      return`${sig} <b>${s.lbl}</b> — Voluntary Attrition: <b>${v}%</b> (${d.months[i]}) ${hDir(v,pr)}`;
-    });
-  }
+  function aVoluntary(ss){return each(ss,(d,s)=>{const arr=d.attrition?.voluntary;const i=hLastIdx(arr);const v=hLast(arr);const pr=hPrev(arr,i);if(v==null)return`<b>${s.lbl}:</b> voluntary data nahi.`;const sig=v<=8?'✅':v<=15?'⚠️':'🔴';return`${sig} <b>${s.lbl}</b> — Voluntary Attrition: <b>${v}%</b> (${d.months[i]}) ${hDir(v,pr)}`;});}
+  function aManning(ss){return each(ss,(d,s)=>{const arr=d.manning?.Total;const i=hLastIdx(arr);const v=hLast(arr);const pr=hPrev(arr,i);if(v==null)return`<b>${s.lbl}:</b> manning data nahi.`;let wk=null,wv=999;Object.entries(d.manning||{}).forEach(([k,a])=>{if(k==='Total')return;const lv=hLast(a);if(lv!=null&&lv<wv){wv=lv;wk=k;}});const sig=v>=98?'✅':v>=90?'⚠️':'🔴';return`${sig} <b>${s.lbl}</b> — Manning: <b>${v}%</b> (${d.months[i]}) ${hDir(v,pr)}`+(wk?`<br>⚠️ Weakest dept: <b>${wk}</b> (${wv}%)`:'');});}
+  function aHeadcount(ss){return each(ss,(d,s)=>{const arr=d.hc?.Total;if(!arr)return`<b>${s.lbl}:</b> data nahi.`;const v=hLast(arr);const start=arr.find(x=>x!=null);const i=hLastIdx(arr);const pr=hPrev(arr,i);const pct=start&&start!==0?Math.round(((v-start)/start)*100):null;return`<b>${s.lbl}</b> — Headcount: <b>${v??'—'}</b> ${hDir(v,pr)}<br>Start: ${start??'—'} → Now: ${v??'—'}${pct!=null?' ('+( pct>=0?'+':'')+pct+'%)':''}`;});}
+  function aJoining(ss){return each(ss,(d,s)=>{const arr=d.joinings?.Total;if(!arr)return`<b>${s.lbl}:</b> data nahi.`;const total=arr.reduce((s,v)=>s+(v||0),0);let pi=-1,pv=-1;arr.forEach((v,i)=>{if(v!=null&&v>pv){pv=v;pi=i;}});return`<b>${s.lbl}</b> — Total Joinings: <b>${total}</b><br>📈 Peak month: <b>${pi>=0?d.months[pi]:'—'}</b> (${pv>=0?pv:'—'} joinings)`;});}
+  function aOffer(ss){return each(ss,(d,s)=>{const arr=d.offerJoin?.Total;const i=hLastIdx(arr);const v=hLast(arr);const pr=hPrev(arr,i);if(v==null)return`<b>${s.lbl}:</b> data nahi.`;const sig=v>=80?'✅':v>=60?'⚠️':'🔴';return`${sig} <b>${s.lbl}</b> — Offer→Join: <b>${v}%</b> (${d.months[i]}) ${hDir(v,pr)}`;});}
+  function aOnboard(ss){return each(ss,(d,s)=>{const adh=hLast(d.adherence),ic=hLast(d.inductionCross),ifn=hLast(d.inductionFunc),mv=hLast(d.marketVisits);if(adh==null&&ic==null&&ifn==null&&mv==null)return`<b>${s.lbl}:</b> Onboarding metrics track nahi hote is level ke liye.`;const sig=(v,g,w)=>v==null?'⚪':v>=g?'✅':v>=w?'⚠️':'🔴';return`<b>${s.lbl}</b><br>${sig(adh,90,75)} Adherence: <b>${hFmt(adh)}</b> &nbsp;|&nbsp; ${sig(ic,80,60)} Cross-Func Induction: <b>${hFmt(ic)}</b><br>${sig(ifn,80,60)} Functional Induction: <b>${hFmt(ifn)}</b> &nbsp;|&nbsp; ${sig(mv,70,50)} Market Visits: <b>${hFmt(mv)}</b>`;});}
+  function aSourcing(ss){return each(ss,(d,s)=>{const r=hLast(d.sourcing?.Total),m=hLast(d.sourceMix?.Total);return`<b>${s.lbl}</b><br>Sourcing Ratio: <b>1:${r??'—'}</b> &nbsp;|&nbsp; Non-Referral Mix: <b>${hFmt(m)}</b>`;});}
+  function aTrend(q,ss){const mk=mKey(q.toLowerCase());return each(ss,(d,s)=>{const{a,l,suf}=mSeries(d,mk);if(!a)return`<b>${s.lbl}:</b> data nahi.`;const parts=d.months.map((m,i)=>{if(a[i]==null)return null;const pr=hPrev(a,i);return`${m}:<b>${a[i]}${suf}</b>${i>0?' '+hDir(a[i],pr):''}`;}).filter(Boolean);return`<b>${s.lbl}</b> — ${l}:<br>`+parts.join(' → ');});}
 
-  function aManning(ss){
-    return each(ss,(d,s)=>{
-      const arr=d.manning?.Total;
-      const i=hLastIdx(arr);const v=hLast(arr);const pr=hPrev(arr,i);
-      if(v==null)return`<b>${s.lbl}:</b> manning data nahi mila.`;
-      let wk=null,wv=999;
-      Object.entries(d.manning||{}).forEach(([k,a])=>{if(k==='Total')return;const lv=hLast(a);if(lv!=null&&lv<wv){wv=lv;wk=k;}});
-      const sig=v>=98?'✅':v>=90?'⚠️':'🔴';
-      return`${sig} <b>${s.lbl}</b> — Manning: <b>${v}%</b> (${d.months[i]}) ${hDir(v,pr)}`+
-        (wk?`<br>⚠️ Weakest dept: <b>${wk}</b> (${wv}%)`:'');
-    });
-  }
-
-  function aHeadcount(ss){
-    return each(ss,(d,s)=>{
-      const arr=d.hc?.Total;
-      if(!arr)return`<b>${s.lbl}:</b> headcount data nahi mila.`;
-      const v=hLast(arr);const start=arr.find(x=>x!=null);
-      const i=hLastIdx(arr);const pr=hPrev(arr,i);
-      const pct=start&&start!==0?Math.round(((v-start)/start)*100):null;
-      return`<b>${s.lbl}</b> — Headcount: <b>${v??'—'}</b> ${hDir(v,pr)}<br>Start: ${start??'—'} → Now: ${v??'—'}${pct!=null?' ('+( pct>=0?'+':'')+pct+'%)':''}`;
-    });
-  }
-
-  function aJoining(ss){
-    return each(ss,(d,s)=>{
-      const arr=d.joinings?.Total;
-      if(!arr)return`<b>${s.lbl}:</b> joinings data nahi mila.`;
-      const total=arr.reduce((s,v)=>s+(v||0),0);
-      let pi=-1,pv=-1;
-      arr.forEach((v,i)=>{if(v!=null&&v>pv){pv=v;pi=i;}});
-      return`<b>${s.lbl}</b> — Total Joinings: <b>${total}</b><br>📈 Peak month: <b>${pi>=0?d.months[pi]:'—'}</b> (${pv>=0?pv:'—'} joinings)`;
-    });
-  }
-
-  function aOffer(ss){
-    return each(ss,(d,s)=>{
-      const arr=d.offerJoin?.Total;
-      const i=hLastIdx(arr);const v=hLast(arr);const pr=hPrev(arr,i);
-      if(v==null)return`<b>${s.lbl}:</b> Offer→Join data nahi mila.`;
-      const sig=v>=80?'✅':v>=60?'⚠️':'🔴';
-      return`${sig} <b>${s.lbl}</b> — Offer→Join: <b>${v}%</b> (${d.months[i]}) ${hDir(v,pr)}`;
-    });
-  }
-
-  function aOnboard(ss){
-    return each(ss,(d,s)=>{
-      const adh=hLast(d.adherence),ic=hLast(d.inductionCross),ifn=hLast(d.inductionFunc),mv=hLast(d.marketVisits);
-      if(adh==null&&ic==null&&ifn==null&&mv==null)
-        return`<b>${s.lbl}:</b> Onboarding metrics is level ke liye track nahi hote.`;
-      const sig=(v,g,w)=>v==null?'⚪':v>=g?'✅':v>=w?'⚠️':'🔴';
-      return`<b>${s.lbl}</b><br>
-${sig(adh,90,75)} Adherence: <b>${hFmt(adh)}</b> &nbsp;|&nbsp; ${sig(ic,80,60)} Cross-Func Induction: <b>${hFmt(ic)}</b><br>
-${sig(ifn,80,60)} Functional Induction: <b>${hFmt(ifn)}</b> &nbsp;|&nbsp; ${sig(mv,70,50)} Market Visits: <b>${hFmt(mv)}</b>`;
-    });
-  }
-
-  function aSourcing(ss){
-    return each(ss,(d,s)=>{
-      const r=hLast(d.sourcing?.Total),m=hLast(d.sourceMix?.Total);
-      return`<b>${s.lbl}</b><br>Sourcing Ratio: <b>1:${r??'—'}</b> &nbsp;|&nbsp; Non-Referral Mix: <b>${hFmt(m)}</b>`;
-    });
-  }
-
-  function aTrend(q,ss){
-    const mk=metricKey(q.toLowerCase());
-    return each(ss,(d,s)=>{
-      const {a,l,suf}=metricSeries(d,mk);
-      if(!a)return`<b>${s.lbl}:</b> ${l} data nahi mila.`;
-      const parts=d.months.map((m,i)=>{
-        if(a[i]==null)return null;
-        const pr=hPrev(a,i);
-        return`${m}:<b>${a[i]}${suf}</b>${i>0?' '+hDir(a[i],pr):''}`;
-      }).filter(Boolean);
-      return`<b>${s.lbl}</b> — ${l}:<br>`+parts.join(' → ');
-    });
-  }
-
-  /* ── Main router ──────────────────────────────────────────── */
   function getAnswer(raw){
-    if(typeof DATA==='undefined'||!DATA)
-      return'⏳ Data abhi Google Sheet se load ho rahi hai. Thoda wait karo aur phir try karo.';
-    const q=raw.trim();
-    const t=q.toLowerCase();
-    const ss=segs(t);
-    const pp=periods(q);
+    if(typeof DATA==='undefined'||!DATA)return'⏳ Data load ho rahi hai — thoda wait karo.';
+    const q=raw.trim(),t=q.toLowerCase(),ss=segs(t),pp=periods(q);
     if(pp.length>=2)return aAttrition(q,ss);
     switch(intent(t)){
       case'help':     return aHelp();
@@ -1102,61 +1024,21 @@ ${sig(ifn,80,60)} Functional Induction: <b>${hFmt(ifn)}</b> &nbsp;|&nbsp; ${sig(
       case'trend':    return aTrend(q,ss);
       case'manning':  return aManning(ss);
       case'attrition':return aAttrition(q,ss);
-      default: return`🤔 Samajh nahi aaya. <b>"help"</b> likho to poori list milegi, ya neeche chips try karo.`;
+      default: return`🤔 Samajh nahi aaya. <b>"help"</b> likho ya chips try karo.`;
     }
   }
 
-  /* ── UI wiring ────────────────────────────────────────────── */
-  const fab    = document.getElementById('hrbot-fab');
-  const panel  = document.getElementById('hrbot-panel');
-  const msgs   = document.getElementById('hrbot-messages');
-  const inp    = document.getElementById('hrbot-input');
-  const send   = document.getElementById('hrbot-send');
-  const close  = document.getElementById('hrbot-close');
-  const chips  = document.getElementById('hrbot-chips');
-
-  function addMsg(html, who){
-    const d=document.createElement('div');
-    d.className='hb-msg '+who;
-    d.innerHTML=html;
-    msgs.appendChild(d);
-    msgs.scrollTop=msgs.scrollHeight;
-  }
-  function showTyping(){
-    const d=document.createElement('div');
-    d.className='hb-typing';d.id='hb-typ';
-    d.innerHTML='<span></span><span></span><span></span>';
-    msgs.appendChild(d);msgs.scrollTop=msgs.scrollHeight;
-  }
+  // UI wiring
+  const fab=document.getElementById('hrbot-fab'),panel=document.getElementById('hrbot-panel'),msgs=document.getElementById('hrbot-messages'),inp=document.getElementById('hrbot-input');
+  function addMsg(html,who){const d=document.createElement('div');d.className='hb-msg '+who;d.innerHTML=html;msgs.appendChild(d);msgs.scrollTop=msgs.scrollHeight;}
+  function showTyping(){const d=document.createElement('div');d.className='hb-typing';d.id='hb-typ';d.innerHTML='<span></span><span></span><span></span>';msgs.appendChild(d);msgs.scrollTop=msgs.scrollHeight;}
   function hideTyping(){const e=document.getElementById('hb-typ');if(e)e.remove();}
-
-  function ask(q){
-    if(!q||!q.trim())return;
-    addMsg(q.replace(/</g,'&lt;'),'user');
-    inp.value='';
-    showTyping();
-    setTimeout(()=>{
-      hideTyping();
-      let ans;
-      try{ans=getAnswer(q);}catch(e){console.error(e);ans='⚠️ Kuch error aa gaya. Phir try karo.';}
-      addMsg(ans,'bot');
-    },380);
-  }
-
-  fab.addEventListener('click',()=>{
-    panel.classList.toggle('open');
-    if(panel.classList.contains('open')&&!msgs.childElementCount){
-      addMsg('👋 Namaste! Main <b>HR Pulse Assistant</b> hoon.<br>Manning, Attrition, Joining, Onboarding — live data se seedha jawab dunga.<br><br>Chips try karo ya <b>"help"</b> likho.','bot');
-    }
-  });
-  close.addEventListener('click',()=>panel.classList.remove('open'));
-  send.addEventListener('click',()=>ask(inp.value));
+  function ask(q){if(!q||!q.trim())return;addMsg(q.replace(/</g,'&lt;'),'user');inp.value='';showTyping();setTimeout(()=>{hideTyping();let ans;try{ans=getAnswer(q);}catch(e){ans='⚠️ Error. Phir try karo.';}addMsg(ans,'bot');},380);}
+  fab.addEventListener('click',()=>{panel.classList.toggle('open');if(panel.classList.contains('open')&&!msgs.childElementCount)addMsg('👋 Namaste! Main <b>HR Pulse Assistant</b> hoon — Manning, Attrition, Joining, Onboarding, sab kuch live data se. Chips try karo ya <b>"help"</b> likho.','bot');});
+  document.getElementById('hrbot-close').addEventListener('click',()=>panel.classList.remove('open'));
+  document.getElementById('hrbot-send').addEventListener('click',()=>ask(inp.value));
   inp.addEventListener('keydown',e=>{if(e.key==='Enter')ask(inp.value);});
-  chips.addEventListener('click',e=>{
-    const b=e.target.closest('.hb-chip');
-    if(b)ask(b.dataset.q);
-  });
-
+  document.getElementById('hrbot-chips').addEventListener('click',e=>{const b=e.target.closest('.hb-chip');if(b)ask(b.dataset.q);});
 })();
 </script>
 </body>
