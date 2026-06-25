@@ -177,7 +177,6 @@ canvas{max-height:280px;}
       </div>
       <div id="tbl-attr-heatmap"></div>
     </div>
-  </div>
 
     <div class="card" id="card-exit-interviews">
       <h3>Exit Interviews — Combined M+S (MP + SaaS)</h3>
@@ -331,6 +330,7 @@ function renderExitInterviews(){
   recHtml += '</tbody></table>';
   document.getElementById('tbl-exit-recent').innerHTML = recHtml;
 }
+let state = { platform:'MP', level:'MS', dept:'Total' };
 let charts = {};
 
 function parseNum(v){
