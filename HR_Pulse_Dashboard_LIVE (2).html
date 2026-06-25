@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>HR Pulse Dashboard (Live)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+:root{
+  --bg:#f4f6fb; --card:#ffffff; --ink:#1c2433; --sub:#6b7585;
+  --blue:#2f5fff; --blue2:#e7edff; --green:#1aa572; --green2:#e6f7ef;
+  --amber:#d98c0e; --amber2:#fff3df; --red:#e0473e; --red2:#fde8e6;
+  --purple:#7b5cf0; --border:#e7e9ef;
+}
+*{box-sizing:border-box;}
+body{margin:0;font-family:'Segoe UI',system-ui,-apple-system,Arial,sans-serif;background:var(--bg);color:var(--ink);}
+.topbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:14px 20px;background:var(--card);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:50;}
+.brand{font-weight:800;font-size:18px;margin-right:10px;}
+.seg{display:flex;background:#eef1f7;border-radius:10px;padding:3px;gap:2px;}
+.seg button{border:none;background:transparent;padding:8px 16px;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer;color:var(--sub);transition:.15s;}
+.seg button.active{background:var(--blue);color:#fff;box-shadow:0 2px 6px rgba(47,95,255,.35);}
+.seg.level button.active{background:var(--ink);}
+.spacer{flex:1;}
+select.dept{padding:8px 12px;border-radius:8px;border:1px solid var(--border);font-size:13px;font-weight:600;color:var(--ink);background:#fff;}
+.refreshbtn{border:1px solid var(--border);background:#fff;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;color:var(--blue);}
+.statuspill{font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;}
+.statuspill.live{background:var(--green2);color:var(--green);}
+.statuspill.err{background:var(--red2);color:var(--red);}
+.statuspill.loading{background:var(--amber2);color:var(--amber);}
+.pagenav{display:flex;gap:6px;padding:10px 20px;background:var(--card);border-bottom:1px solid var(--border);overflow-x:auto;position:sticky;top:64px;z-index:40;}
+.pagenav button{border:none;background:#f2f4f9;padding:9px 16px;border-radius:20px;font-size:13px;font-weight:700;color:var(--sub);cursor:pointer;white-space:nowrap;}
+.pagenav button.active{background:var(--ink);color:#fff;}
+.wrap{max-width:1280px;margin:0 auto;padding:18px 20px 60px;}
+.page{display:none;}
+.page.active{display:block;}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px;}
+.kpi{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px 18px;}
+.kpi .lbl{font-size:11.5px;font-weight:800;letter-spacing:.4px;color:var(--sub);text-transform:uppercase;}
+.kpi .val{font-size:28px;font-weight:800;margin:6px 0 2px;}
+.kpi .tgt{font-size:12px;color:var(--sub);}
+.kpi .delta{font-size:12px;font-weight:700;}
+.up{color:var(--green);} .down{color:var(--red);} .flat{color:var(--sub);}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:16px;}
+.card h3{margin:0 0 12px;font-size:15px;font-weight:800;}
+.grid2{display:grid;grid-template-columns:1.1fr .9fr;gap:14px;}
+.grid2 .card{margin-bottom:0;}
+.section-title{font-size:17px;font-weight:800;margin:22px 0 12px;display:flex;align-items:center;gap:8px;}
+.section-title span.n{background:var(--blue);color:#fff;width:24px;height:24px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;font-size:13px;}
+table{width:100%;border-collapse:collapse;font-size:12.5px;}
+th,td{padding:7px 9px;text-align:right;border-bottom:1px solid #f0f1f5;}
+th:first-child,td:first-child{text-align:left;font-weight:700;color:var(--ink);}
+thead th{color:var(--sub);font-weight:700;font-size:11px;text-transform:uppercase;}
+tr.total td{font-weight:800;background:#fafbff;}
+.heat{font-weight:700;border-radius:6px;}
+.insights{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.ins-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;}
+.ins-card h4{margin:0 0 10px;font-size:13.5px;font-weight:800;color:var(--sub);text-transform:uppercase;letter-spacing:.3px;}
+.exec-banner{background:linear-gradient(90deg,#1c2433,#2f5fff);color:#fff;font-weight:700;font-size:13.5px;padding:12px 18px;border-radius:12px;margin-bottom:14px;}
+.snapshot-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+.snap-card{border-radius:14px;padding:16px;border:1px solid var(--border);}
+.snap-card h4{margin:0 0 10px;font-size:13.5px;font-weight:800;}
+.snap-good{background:var(--green2);} .snap-good h4{color:var(--green);}
+.snap-watch{background:var(--amber2);} .snap-watch h4{color:var(--amber);}
+.snap-action{background:var(--red2);} .snap-action h4{color:var(--red);}
+#ov-actions{background:var(--blue2);border:1px solid var(--border);}
+#ov-actions h4{margin:0 0 10px;font-size:13.5px;font-weight:800;color:var(--blue);text-transform:uppercase;}
+@media (max-width:900px){.snapshot-grid{grid-template-columns:1fr;}}
+.ins-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px;}
+.ins-list li{display:flex;gap:9px;align-items:flex-start;font-size:13.5px;line-height:1.4;}
+.dot{flex:0 0 18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;margin-top:1px;}
+.dot.good{background:var(--green2);color:var(--green);}
+.dot.warn{background:var(--amber2);color:var(--amber);}
+.dot.bad{background:var(--red2);color:var(--red);}
+.dot.info{background:var(--blue2);color:var(--blue);}
+.placeholder{padding:60px 20px;text-align:center;color:var(--sub);}
+.placeholder b{color:var(--ink);}
+.note{font-size:12px;color:var(--sub);margin-top:6px;}
+canvas{max-height:280px;}
+@media (max-width:900px){.kpis{grid-template-columns:repeat(2,1fr);}.grid2{grid-template-columns:1fr;}.insights{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">📊 HR Pulse <span style="font-size:11px;font-weight:700;color:var(--sub);">LIVE</span></div>
+  <div class="seg" id="platformSeg">
+    <button data-val="MP" class="active">Marketplace</button>
+    <button data-val="SaaS">SaaS</button>
+  </div>
+  <div class="seg level" id="levelSeg">
+    <button data-val="MS" class="active">M+S</button>
+    <button data-val="E">Entry</button>
+  </div>
+  <div class="spacer"></div>
+  <span class="statuspill loading" id="statusPill">Loading live data…</span>
+  <button class="refreshbtn" id="refreshBtn">⟳ Refresh</button>
+  <select class="dept" id="deptSelect"></select>
+</div>
+
+<div class="pagenav" id="pageNav">
+  <button data-page="overview" class="active">Overview</button>
+  <button data-page="p1">1. Manning &amp; Hiring Funnel</button>
+  <button data-page="p2">2. Onboarding &amp; Recruitment</button>
+  <button data-page="p3">3. Attrition</button>
+  <button data-page="p4">4. Cost</button>
+</div>
+
+<div class="wrap">
+
+  <div class="page active" id="page-overview">
+    <div class="kpis" id="ov-kpis"></div>
+
+    <div class="exec-banner">15-Minute Executive Scan — what's right, what's wrong, what to do next.</div>
+    <div class="snapshot-grid" id="ov-snapshot"></div>
+    <div class="card" id="ov-actions" style="display:none;"></div>
+
+    <h2 style="margin:24px 0 10px;font-size:16px;font-weight:800;">Detailed Breakdown</h2>
+    <div class="insights" id="ov-insights"></div>
+  </div>
+
+  <div class="page" id="page-p1">
+    <div class="kpis" id="p1-kpis"></div>
+    <div class="section-title"><span class="n">A</span> Manning &amp; Headcount</div>
+    <div class="grid2">
+      <div class="card"><h3>Manning % Trend</h3><canvas id="chart-manning"></canvas></div>
+      <div class="card"><h3>Manning % Heatmap (by dept)</h3><div id="tbl-manning"></div></div>
+    </div>
+    <div class="grid2" style="margin-top:14px;">
+      <div class="card"><h3>Headcount Trend</h3><canvas id="chart-hc"></canvas></div>
+      <div class="card"><h3>Headcount Table (by dept)</h3><div id="tbl-hc"></div></div>
+    </div>
+
+    <div class="section-title"><span class="n">B</span> Joining Trend</div>
+    <div class="grid2">
+      <div class="card"><h3>Joinings — Trend</h3><canvas id="chart-join"></canvas></div>
+      <div class="card"><h3>Selections vs Joinings</h3><canvas id="chart-selvjoin"></canvas></div>
+    </div>
+
+    <div class="section-title"><span class="n">C</span> Sourcing → Selection → Offer → Joining</div>
+    <div class="grid2">
+      <div class="card"><h3>Sourcing : Selection Ratio (Total)</h3><canvas id="chart-sourcing"></canvas></div>
+      <div class="card"><h3>Offer → Joining %</h3><canvas id="chart-offer"></canvas></div>
+    </div>
+
+    <div class="section-title"><span class="n">D</span> Source Mix</div>
+    <div class="card"><h3>% Joinings via Non-Referral Sources (Total)</h3><canvas id="chart-sourcemix"></canvas></div>
+  </div>
+
+  <div class="page" id="page-p2">
+    <div class="kpis" id="p2-kpis"></div>
+    <div class="card"><h3>Recruitment & Onboarding Scorecard — Trend</h3><canvas id="chart-onboard" style="max-height:320px;"></canvas></div>
+    <div class="card"><h3>Scorecard Table</h3><div id="tbl-onboard"></div></div>
+    <div class="card" id="p2-note"></div>
+  </div>
+
+  <div class="page" id="page-p3">
+    <div class="kpis" id="p3-kpis"></div>
+    <div class="grid2">
+      <div class="card"><h3>Total Attrition % — Trend</h3><canvas id="chart-attr-total"></canvas></div>
+      <div class="card"><h3>Voluntary Attrition % — Trend</h3><canvas id="chart-attr-vol"></canvas></div>
+    </div>
+    <div class="card"><h3>Tenure-wise Voluntary Attrition (latest quarter)</h3><canvas id="chart-attr-tenure"></canvas></div>
+    <div class="card"><h3>Total Exits — Trend</h3><canvas id="chart-exits"></canvas></div>
+
+    <div class="grid2">
+      <div class="card"><h3>Department-wise Attrition % (latest)</h3><canvas id="chart-dept-attr"></canvas></div>
+      <div class="card"><h3>Department-wise Attrition — Table</h3><div id="tbl-dept-attr"></div></div>
+    </div>
+    <div class="card" id="card-dept-exits" style="display:none;">
+      <h3>Department-wise Total Exits (latest)</h3><div id="tbl-dept-exits"></div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
+        <h3 style="margin:0;">Attrition Heatmap — by Department</h3>
+        <select class="dept" id="attrMetricSelect"></select>
+      </div>
+      <div id="tbl-attr-heatmap"></div>
+    </div>
+
+    <div class="card" id="card-exit-interviews">
+      <h3>Exit Interviews — Combined M+S (MP + SaaS)</h3>
+      <div class="note" style="margin-bottom:10px;">Live from MS_Exit_Interview sheet. Shown only for Mid+Senior level.</div>
+      <div id="exit-body">
+        <div class="kpis" id="exit-kpis"></div>
+        <div style="position:relative;height:220px;margin:14px 0;"><canvas id="chart-exit-trend"></canvas></div>
+        <div style="margin-bottom:14px;"><b style="font-size:12.5px;color:var(--sub);">Top recurring reasons:</b><br><div id="exit-reasons" style="margin-top:6px;"></div></div>
+        <div class="grid2">
+          <div><h4 style="font-size:13px;margin:0 0 8px;">Department-wise Exit Count</h4><div id="tbl-exit-dept"></div></div>
+          <div><h4 style="font-size:13px;margin:0 0 8px;">Most Recent Exits</h4><div id="tbl-exit-recent"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="page" id="page-p4">
+    <div class="placeholder">
+      <h2>💰 Cost Dashboard — Data Not Available</h2>
+      <p>Live sheet me abhi cost / CTC / budget column nahi hai. Jab aap Cost data wala "Input_Cost" tab add karke uska publish link bhejenge, Page 4 yahi pattern follow karke live ho jayega.</p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const SHEET_DOC = "2PACX-1vQ-gEGdHanRGjsqEsynVDdUTyfzH-vIWApDOiKTbPAmDfgA_WxglY4eAVInhtaYjVnyNqoeETZMcJnN";
+function pubCsvUrl(gid){ return `https://docs.google.com/spreadsheets/d/e/${SHEET_DOC}/pub?gid=${gid}&single=true&output=csv`; }
+
+const SHEET_URLS = {
+  MP_MS:   pubCsvUrl(0),
+  SaaS_MS: pubCsvUrl(261734094),
+  MP_E:    pubCsvUrl(360221029),
+  SaaS_E:  pubCsvUrl(849402675)
+};
+const EXIT_INTERVIEW_URL = pubCsvUrl(585161339);
+const INSIGHTS_URL = pubCsvUrl(1117973602);
+let INSIGHTS_RAW_TEXT = '';
+
+let DATA = null;
+let EXIT_DATA = [];
+
+const MONTH_IDX = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+function monthSortKey(label){
+  const m = String(label||'').match(/([A-Za-z]{3})'?(\d{2})/);
+  if(!m) return -1;
+  const mi = MONTH_IDX[m[1]] ?? -1;
+  if(mi<0) return -1;
+  return parseInt(m[2],10)*12 + mi;
+}
+
+// MS_Exit_Interview has a fixed column layout (header text varies/has special chars,
+// so we key off the 'Emp. Code' header to find the start row, then read by position).
+function parseExitInterviewCSV(text){
+  const rows = Papa.parse(text, {skipEmptyLines:true}).data;
+  let headerIdx = rows.findIndex(r => (r[0]||'').trim()==='Emp. Code');
+  if(headerIdx===-1) headerIdx = 0;
+  const records = [];
+  for(let r=headerIdx+1; r<rows.length; r++){
+    const row = rows[r];
+    const empCode = (row[0]||'').trim();
+    if(!empCode) continue;
+    const dept = (row[2]||'').trim();
+    const month = (row[3]||'').trim();
+    const tenure = (row[4]||'').trim();
+    const ageBucket = (row[5]||'').trim();
+    const manager = (row[6]||'').trim();
+    const exitType = (row[7]||'').trim();
+    const hrRemarks = (row[15]||'').trim();
+    const analysisRaw = (row[16]||'').trim();
+    const analysis = analysisRaw.split(/[,;\n]/).map(s=>s.trim()).filter(Boolean);
+    records.push({empCode, dept, month, tenure, ageBucket, manager, exitType, hrRemarks, analysis});
+  }
+  return records;
+}
+
+const EXIT_REASON_KEYWORDS = [
+  ['Company culture / work pressure','company culture'],
+  ['Limited learnings from manager','Limited Learnings'],
+  ['Better compensation outside','Better compensation'],
+  ['Limited growth/career path','Limited Growth'],
+  ['Role mismatch / lack of challenge','Role not meety'],
+  ['Relationship with supervisor','Relationship with supervisor'],
+];
+
+function aggregateExits(records){
+  const monthMap = new Map();
+  records.forEach(r=>{
+    if(!monthMap.has(r.month)) monthMap.set(r.month, {Voluntary:0,Involuntary:0,Movement:0});
+    const bucket = monthMap.get(r.month);
+    if(bucket[r.exitType]!=null) bucket[r.exitType]++;
+  });
+  const months = Array.from(monthMap.keys()).sort((a,b)=>monthSortKey(a)-monthSortKey(b));
+  const deptCounts = new Map();
+  records.forEach(r=>{ deptCounts.set(r.dept, (deptCounts.get(r.dept)||0)+1); });
+  const reasonCounts = EXIT_REASON_KEYWORDS.map(([label,kw])=>{
+    const count = records.filter(r => r.analysis.some(a => a.toLowerCase().includes(kw.toLowerCase()))).length;
+    return {label, count};
+  }).sort((a,b)=>b.count-a.count);
+  return {months, monthMap, deptCounts, reasonCounts};
+}
+
+function renderExitInterviews(){
+  const card = document.getElementById('card-exit-interviews');
+  if(state.level !== 'MS'){
+    card.style.display = 'none';
+    return;
+  }
+  card.style.display = 'block';
+  if(!EXIT_DATA || !EXIT_DATA.length){
+    document.getElementById('exit-body').innerHTML = '<div class="placeholder">Exit interview live data unavailable.</div>';
+    return;
+  }
+  document.getElementById('exit-body').style.display = '';
+  const agg = aggregateExits(EXIT_DATA);
+  const totalCount = EXIT_DATA.length;
+  const volCount = EXIT_DATA.filter(r=>r.exitType==='Voluntary').length;
+  const involCount = EXIT_DATA.filter(r=>r.exitType==='Involuntary').length;
+  const moveCount = EXIT_DATA.filter(r=>r.exitType==='Movement').length;
+  const latestMonth = agg.months[agg.months.length-1];
+  const latestMonthCount = latestMonth ? EXIT_DATA.filter(r=>r.month===latestMonth).length : 0;
+
+  document.getElementById('exit-kpis').innerHTML = [
+    kpiCard('Total Exit Interviews (all-time)', totalCount, '', 'Combined M+S, MP+SaaS'),
+    kpiCard('This Month'+(latestMonth?` (${latestMonth})`:''), latestMonthCount),
+    kpiCard('Voluntary / Involuntary', `${volCount} / ${involCount}`),
+    kpiCard('Internal Movement', moveCount)
+  ].join('');
+
+  const volSeries = agg.months.map(m=>agg.monthMap.get(m).Voluntary);
+  const involSeries = agg.months.map(m=>agg.monthMap.get(m).Involuntary);
+  const moveSeries = agg.months.map(m=>agg.monthMap.get(m).Movement);
+  destroyChart('chart-exit-trend');
+  charts['chart-exit-trend'] = new Chart(document.getElementById('chart-exit-trend').getContext('2d'), {
+    type:'bar',
+    data:{ labels: agg.months, datasets:[
+      {label:'Voluntary', data:volSeries, backgroundColor:palette[2]},
+      {label:'Involuntary', data:involSeries, backgroundColor:palette[4]},
+      {label:'Movement', data:moveSeries, backgroundColor:palette[0]},
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      scales:{ x:{stacked:true, ticks:{font:{size:10}}}, y:{stacked:true, beginAtZero:true, ticks:{font:{size:10}}} },
+      plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:11}}}} }
+  });
+
+  document.getElementById('exit-reasons').innerHTML = agg.reasonCounts.filter(r=>r.count>0).map(r=>
+    `<span style="background:#fde8e6;color:#e0473e;font-weight:700;font-size:11.5px;padding:5px 10px;border-radius:14px;margin:3px;display:inline-block;">${r.label} · ${r.count}</span>`
+  ).join('') || '<span class="note">No recurring reason categories matched.</span>';
+
+  const deptSorted = Array.from(agg.deptCounts.entries()).sort((a,b)=>b[1]-a[1]).slice(0,12);
+  let deptHtml = '<table><thead><tr><th>Dept</th><th>Exit Count</th></tr></thead><tbody>';
+  deptSorted.forEach(([dept,count])=>{ deptHtml += `<tr><td>${dept}</td><td>${count}</td></tr>`; });
+  deptHtml += '</tbody></table>';
+  document.getElementById('tbl-exit-dept').innerHTML = deptHtml;
+
+  const sorted = [...EXIT_DATA].sort((a,b)=>monthSortKey(b.month)-monthSortKey(a.month));
+  const recent = sorted.slice(0,12);
+  let recHtml = '<table><thead><tr><th>Month</th><th>Dept</th><th>Manager</th><th>Tenure</th><th>Type</th><th>Top Reason</th></tr></thead><tbody>';
+  recent.forEach(r=>{
+    const typeColor = r.exitType==='Voluntary' ? '#d98c0e' : r.exitType==='Involuntary' ? '#e0473e' : '#2f5fff';
+    const hi = r.exitType==='Involuntary';
+    recHtml += `<tr ${hi?'style="background:#fff3df;"':''}><td>${r.month}</td><td>${r.dept}</td><td>${r.manager}</td><td>${r.tenure}</td><td><span style="color:${typeColor};font-weight:700;">${r.exitType}</span></td><td style="text-align:left;font-size:11.5px;">${r.analysis[0]||'—'}</td></tr>`;
+  });
+  recHtml += '</tbody></table>';
+  document.getElementById('tbl-exit-recent').innerHTML = recHtml;
+}
+
+let state = { platform:'MP', level:'MS', dept:'Total' };
+let charts = {};
+
+function parseNum(v){
+  if(v===undefined||v===null) return null;
+  const s = String(v).trim();
+  if(s===''||s==='—'||s==='-'||s==='--'||s.toLowerCase()==='na') return null;
+  const cleaned = s.replace(/[^0-9.\-]/g,'');
+  if(cleaned===''||cleaned==='-') return null;
+  const n = parseFloat(cleaned);
+  return isNaN(n)?null:n;
+}
+
+// Percentage cells may arrive as "99%" (formatted text) OR as raw "0.99" (fraction,
+// no % sign) depending on how Google Sheets exports that publish-to-web CSV.
+// Normalize both to a 0-100 percent-number scale so thresholds (>=98, >=80 etc.) work either way.
+function parsePercent(v){
+  if(v===undefined||v===null) return null;
+  const s = String(v).trim();
+  if(s===''||s==='—'||s==='-'||s==='--'||s.toLowerCase()==='na') return null;
+  const hasPercentSign = s.includes('%');
+  const cleaned = s.replace(/[^0-9.\-]/g,'');
+  if(cleaned===''||cleaned==='-') return null;
+  let n = parseFloat(cleaned);
+  if(isNaN(n)) return null;
+  if(!hasPercentSign && Math.abs(n) <= 1) n = n*100; // raw fraction exported without % sign
+  return Math.round(n*100)/100;
+}
+
+// "1:7.6" style ratio cells -> numeric 7.6. Treats "-", "--", "NA" as blank.
+function parseRatio(v){
+  if(v===undefined||v===null) return null;
+  const s = String(v).trim();
+  if(s===''||s==='—'||s==='-'||s==='--'||s.toLowerCase()==='na') return null;
+  const part = s.includes(':') ? s.split(':')[1] : s;
+  const n = parseFloat(part.replace(/[^0-9.\-]/g,''));
+  return isNaN(n)?null:n;
+}
+
+const PERCENT_METRICS = new Set([
+  'Manning %','Offer to Joining %','Source Mix % (Non-Referral)','Adherence to Recruitment Process %',
+  'Cross-Functional Induction %','Functional Induction %','Market Visits Done %',
+  'Total Attrition % (Qtrly)','Voluntary Attrition % (Qtrly)',
+  '24M+ Voluntary Attrition %','12-24M Voluntary Attrition %','6-12M Voluntary Attrition %','0-6M Voluntary Attrition %',
+  '12M+ Voluntary Attrition %','3-6M Voluntary Attrition %','0-3M Voluntary Attrition %'
+]);
+const RATIO_METRICS = new Set(['Sourcing:Selection Ratio (1:X)']);
+
+function parseSheetCSV(text){
+  const rows = Papa.parse(text, {skipEmptyLines:false}).data;
+  let headerRowIdx = -1;
+  for(let i=0;i<rows.length;i++){ if((rows[i][0]||'').trim()==='Metric'){ headerRowIdx=i; break; } }
+  if(headerRowIdx===-1) throw new Error('Header row not found');
+  const header = rows[headerRowIdx];
+  let latestIdx = header.findIndex(h=>(h||'').trim()==='Latest');
+  if(latestIdx===-1) latestIdx = header.length;
+  const monthCols = [];
+  for(let c=2;c<latestIdx;c++){ if((header[c]||'').trim()!=='') monthCols.push({idx:c, label:header[c].trim()}); }
+  const months = monthCols.map(m=>m.label);
+  const records = [];
+  for(let r=headerRowIdx+1;r<rows.length;r++){
+    const row = rows[r];
+    const metric = (row[0]||'').trim();
+    const dept = (row[1]||'').trim();
+    if(!metric || !dept) continue;
+    const parser = RATIO_METRICS.has(metric) ? parseRatio : PERCENT_METRICS.has(metric) ? parsePercent : parseNum;
+    const values = monthCols.map(m => parser(row[m.idx]));
+    records.push({metric, dept, values});
+  }
+  return {months, records};
+}
+
+function buildDataset(parsed){
+  const d = {
+    months: parsed.months,
+    manning:{}, hc:{}, joinings:{}, selections:{}, sourcing:{}, offerJoin:{}, sourceMix:{},
+    adherence:[], inductionCross:[], inductionFunc:[], marketVisits:[],
+    attrition:{ total:[], voluntary:[], totalExit:[], byDeptTotal:{}, byDeptVoluntary:{}, byDeptExits:{}, metrics:{} },
+    target:{ manning:98 }
+  };
+  const ATTR_METRIC_NAMES = new Set([
+    'Total Attrition % (Qtrly)','Voluntary Attrition % (Qtrly)',
+    '24M+ Voluntary Attrition %','12-24M Voluntary Attrition %','6-12M Voluntary Attrition %','0-6M Voluntary Attrition %',
+    '12M+ Voluntary Attrition %','3-6M Voluntary Attrition %','0-3M Voluntary Attrition %'
+  ]);
+  parsed.records.forEach(r=>{
+    const m = r.metric, dept = r.dept;
+    if(m==='Manning %') d.manning[dept] = r.values;
+    else if(m==='Headcount') d.hc[dept] = r.values;
+    else if(m==='Joinings') d.joinings['Total'] = r.values;
+    else if(m==='Selections') d.selections['Total'] = r.values;
+    else if(m==='Sourcing:Selection Ratio (1:X)') d.sourcing['Total'] = r.values;
+    else if(m==='Offer to Joining %') d.offerJoin['Total'] = r.values;
+    else if(m==='Source Mix % (Non-Referral)') d.sourceMix['Total'] = r.values;
+    else if(m==='Adherence to Recruitment Process %') d.adherence = r.values;
+    else if(m==='Cross-Functional Induction %') d.inductionCross = r.values;
+    else if(m==='Functional Induction %') d.inductionFunc = r.values;
+    else if(m==='Market Visits Done %') d.marketVisits = r.values;
+    else if(m==='Total Exits'){
+      d.attrition.byDeptExits[dept] = r.values;
+      if(dept==='Total') d.attrition.totalExit = r.values;
+    }
+    if(ATTR_METRIC_NAMES.has(m)){
+      // Generic store: every dept's full month-trend under this exact metric label.
+      // Powers the Page 3 heatmap filter (Total / Voluntary / each tenure bucket).
+      if(!d.attrition.metrics[m]) d.attrition.metrics[m] = {};
+      d.attrition.metrics[m][dept] = r.values;
+      if(dept==='Total'){
+        if(m==='Total Attrition % (Qtrly)') d.attrition.total = r.values;
+        else if(m==='Voluntary Attrition % (Qtrly)') d.attrition.voluntary = r.values;
+        else if(m==='24M+ Voluntary Attrition %') d.attrition.t24 = r.values;
+        else if(m==='12-24M Voluntary Attrition %') d.attrition.t12_24 = r.values;
+        else if(m==='6-12M Voluntary Attrition %') d.attrition.t6_12 = r.values;
+        else if(m==='0-6M Voluntary Attrition %') d.attrition.t0_6 = r.values;
+        else if(m==='12M+ Voluntary Attrition %') d.attrition.t12p = r.values;
+        else if(m==='3-6M Voluntary Attrition %') d.attrition.t3_6 = r.values;
+        else if(m==='0-3M Voluntary Attrition %') d.attrition.t0_3 = r.values;
+      }
+      if(m==='Total Attrition % (Qtrly)') d.attrition.byDeptTotal[dept] = r.values;
+      if(m==='Voluntary Attrition % (Qtrly)') d.attrition.byDeptVoluntary[dept] = r.values;
+    }
+  });
+  return d;
+}
+
+async function loadAllData(){
+  document.getElementById('statusPill').textContent = 'Loading live data…';
+  document.getElementById('statusPill').className = 'statuspill loading';
+  try{
+    const keys = Object.keys(SHEET_URLS);
+    const texts = await Promise.all(keys.map(k => fetch(SHEET_URLS[k]+'&_ts='+Date.now()).then(r=>{
+      if(!r.ok) throw new Error('Fetch failed for '+k);
+      return r.text();
+    })));
+    const built = {};
+    keys.forEach((k,i)=>{ built[k] = buildDataset(parseSheetCSV(texts[i])); });
+    DATA = { MP:{ MS: built.MP_MS, E: built.MP_E }, SaaS:{ MS: built.SaaS_MS, E: built.SaaS_E } };
+
+    // Exit interviews + Insights have a different (non Metric/Dept-grid) layout,
+    // so they're fetched + parsed separately rather than through buildDataset().
+    try{
+      const exitText = await fetch(EXIT_INTERVIEW_URL+'&_ts='+Date.now()).then(r=>r.text());
+      EXIT_DATA = parseExitInterviewCSV(exitText);
+    }catch(e){ console.error('Exit interview fetch failed', e); EXIT_DATA = []; }
+    try{
+      INSIGHTS_RAW_TEXT = await fetch(INSIGHTS_URL+'&_ts='+Date.now()).then(r=>r.text());
+    }catch(e){ console.error('Insights fetch failed', e); INSIGHTS_RAW_TEXT = ''; }
+
+    document.getElementById('statusPill').textContent = '● Live — connected to Google Sheet';
+    document.getElementById('statusPill').className = 'statuspill live';
+    renderAll();
+  }catch(err){
+    console.error(err);
+    document.getElementById('statusPill').textContent = '⚠ Could not load live sheet (check publish link / CORS)';
+    document.getElementById('statusPill').className = 'statuspill err';
+  }
+}
+
+document.getElementById('refreshBtn').addEventListener('click', loadAllData);
+
+function ds(){ return DATA[state.platform][state.level]; }
+function last(arr){ if(!arr) return null; for(let i=arr.length-1;i>=0;i--) if(arr[i]!=null) return arr[i]; return null; }
+function lastIdx(arr){ if(!arr) return -1; for(let i=arr.length-1;i>=0;i--) if(arr[i]!=null) return i; return -1; }
+function prevOf(arr,i){ if(!arr) return null; for(let k=i-1;k>=0;k--) if(arr[k]!=null) return arr[k]; return null; }
+function fmt(v,suf='%'){ return v==null? '—' : (Math.round(v*10)/10)+suf; }
+function deltaTag(curr,prev,goodIfUp=true){
+  if(curr==null||prev==null) return '<span class="flat">—</span>';
+  const d = Math.round((curr-prev)*10)/10;
+  if(d===0) return '<span class="flat">flat</span>';
+  const up = d>0;
+  const cls = (up===goodIfUp)? 'up':'down';
+  return `<span class="${cls}">${up?'▲':'▼'} ${Math.abs(d)} pts</span>`;
+}
+
+function destroyChart(id){ if(charts[id]){ charts[id].destroy(); delete charts[id]; } }
+function lineChart(id,labels,series,opts={}){
+  destroyChart(id);
+  const el = document.getElementById(id); if(!el) return;
+  const ctx = el.getContext('2d');
+  charts[id] = new Chart(ctx,{type:'line',data:{labels,datasets:series},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:11}}}},
+      scales:{y:{beginAtZero: opts.beginAtZero!==false, ticks:{font:{size:10}}},x:{ticks:{font:{size:10}}}}}});
+}
+function barChart(id,labels,series,opts={}){
+  destroyChart(id);
+  const el = document.getElementById(id); if(!el) return;
+  const ctx = el.getContext('2d');
+  charts[id] = new Chart(ctx,{type:'bar',data:{labels,datasets:series},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:11}}}},
+      scales:{y:{beginAtZero:true,ticks:{font:{size:10}}},x:{ticks:{font:{size:10}}}}}});
+}
+const palette = ['#2f5fff','#1aa572','#d98c0e','#7b5cf0','#e0473e','#0bb1bf','#c2410c'];
+
+function deptList(){ const d = ds(); return Object.keys(d.manning); }
+function populateDeptSelect(){
+  const sel = document.getElementById('deptSelect');
+  const list = deptList();
+  sel.innerHTML = list.map(d=>`<option value="${d}">${d}</option>`).join('');
+  if(!list.includes(state.dept)) state.dept = 'Total';
+  sel.value = state.dept;
+}
+
+function kpiCard(label,val,target,sub,deltaHtml){
+  return `<div class="kpi"><div class="lbl">${label}</div><div class="val">${val}</div>
+    <div class="tgt">${target?('Target: '+target):''} ${sub?(' · '+sub):''}</div>
+    <div class="delta">${deltaHtml||''}</div></div>`;
+}
+
+function renderPage1(){
+  const d = ds();
+  const dept = state.dept;
+  const manningArr = d.manning[dept] || d.manning['Total'] || [];
+  const hcArr = d.hc[dept] || d.hc['Total'] || [];
+  const mi = lastIdx(manningArr), hi = lastIdx(hcArr);
+
+  document.getElementById('p1-kpis').innerHTML = [
+    kpiCard('Manning % ('+dept+')', fmt(last(manningArr)), d.target.manning+'%', '', deltaTag(manningArr[mi], prevOf(manningArr,mi))),
+    kpiCard('Headcount ('+dept+')', last(hcArr)??'—','', '', deltaTag(hcArr[hi], prevOf(hcArr,hi), false)),
+    kpiCard('Joinings (latest)', last(d.joinings['Total'])??'—','', 'cumulative trend below'),
+    kpiCard('Offer→Join % (latest)', fmt(last(d.offerJoin['Total'])), '', '', deltaTag(d.offerJoin['Total'][lastIdx(d.offerJoin['Total'])], prevOf(d.offerJoin['Total'],lastIdx(d.offerJoin['Total']))))
+  ].join('');
+
+  const manSeries = [{label:'Total',data:d.manning['Total'],borderColor:palette[0],backgroundColor:palette[0],tension:.3}];
+  if(dept!=='Total') manSeries.push({label:dept,data:manningArr,borderColor:palette[1],backgroundColor:palette[1],tension:.3});
+  lineChart('chart-manning', d.months, manSeries, {beginAtZero:false});
+
+  let html = '<table><thead><tr><th>Dept</th>'+d.months.map(m=>`<th>${m}</th>`).join('')+'</tr></thead><tbody>';
+  Object.keys(d.manning).forEach(k=>{
+    const row = d.manning[k];
+    html += `<tr class="${k==='Total'?'total':''}"><td>${k}</td>` + row.map(v=>{
+      if(v==null) return '<td>—</td>';
+      const c = v>=98 ? '#e6f7ef' : v>=90 ? '#fff3df':'#fde8e6';
+      const col = v>=98 ? '#1aa572' : v>=90 ? '#d98c0e':'#e0473e';
+      return `<td><span class="heat" style="background:${c};color:${col};padding:2px 7px;">${v}%</span></td>`;
+    }).join('') + '</tr>';
+  });
+  html += '</tbody></table>';
+  document.getElementById('tbl-manning').innerHTML = html;
+
+  const hcSeries = [{label:'Total',data:d.hc['Total'],borderColor:palette[0],backgroundColor:palette[0],tension:.3}];
+  if(dept!=='Total') hcSeries.push({label:dept,data:hcArr,borderColor:palette[1],backgroundColor:palette[1],tension:.3});
+  lineChart('chart-hc', d.months, hcSeries);
+
+  let html2 = '<table><thead><tr><th>Dept</th>'+d.months.map(m=>`<th>${m}</th>`).join('')+'</tr></thead><tbody>';
+  Object.keys(d.hc).forEach(k=>{
+    html2 += `<tr class="${k==='Total'?'total':''}"><td>${k}</td>` + d.hc[k].map(v=>`<td>${v==null?'—':v}</td>`).join('') + '</tr>';
+  });
+  html2 += '</tbody></table>';
+  document.getElementById('tbl-hc').innerHTML = html2;
+
+  lineChart('chart-join', d.months, [{label:'Total Joinings',data:d.joinings['Total'],borderColor:palette[0],backgroundColor:palette[0],tension:.3}]);
+  barChart('chart-selvjoin', d.months, [
+    {label:'Selections',data:d.selections['Total'],backgroundColor:palette[0]},
+    {label:'Joinings',data:d.joinings['Total'],backgroundColor:palette[1]}
+  ]);
+  lineChart('chart-sourcing', d.months, [{label:'Sourcing:Selection (1:X)',data:d.sourcing['Total'],borderColor:palette[3],backgroundColor:palette[3],tension:.3}]);
+  lineChart('chart-offer', d.months, [{label:'Offer→Join %',data:d.offerJoin['Total'],borderColor:palette[4],backgroundColor:palette[4],tension:.3}],{beginAtZero:false});
+  lineChart('chart-sourcemix', d.months, [{label:'% via Non-Referral',data:d.sourceMix['Total'],borderColor:palette[2],backgroundColor:palette[2],tension:.3}],{beginAtZero:false});
+}
+
+function renderPage2(){
+  const d = ds();
+  const hasData = (d.adherence||[]).some(v=>v!=null);
+  document.getElementById('p2-kpis').innerHTML = [
+    kpiCard('Recruitment Process Adherence', fmt(last(d.adherence)), '100% target'),
+    kpiCard('Cross-Functional Induction', fmt(last(d.inductionCross))),
+    kpiCard('Functional Induction', fmt(last(d.inductionFunc))),
+    kpiCard('Market Visits Done', fmt(last(d.marketVisits)))
+  ].join('');
+
+  if(!hasData){
+    document.querySelector('#page-p2 .card').innerHTML = '<h3>Recruitment & Onboarding Scorecard — Trend</h3><div class="placeholder">Is level ke liye onboarding/induction/market-visit data sheet me track nahi ho raha.</div>';
+    document.getElementById('tbl-onboard').innerHTML='';
+    document.getElementById('p2-note').innerHTML='';
+    return;
+  }
+  lineChart('chart-onboard', d.months, [
+    {label:'Adherence %',data:d.adherence,borderColor:palette[0],backgroundColor:palette[0],tension:.3},
+    {label:'Cross-Func Induction %',data:d.inductionCross,borderColor:palette[1],backgroundColor:palette[1],tension:.3},
+    {label:'Functional Induction %',data:d.inductionFunc,borderColor:palette[2],backgroundColor:palette[2],tension:.3},
+    {label:'Market Visits %',data:d.marketVisits,borderColor:palette[3],backgroundColor:palette[3],tension:.3}
+  ],{beginAtZero:false});
+
+  let html = '<table><thead><tr><th>Metric</th>'+d.months.map(m=>`<th>${m}</th>`).join('')+'</tr></thead><tbody>';
+  [['Adherence %',d.adherence],['Cross-Functional Induction %',d.inductionCross],['Functional Induction %',d.inductionFunc],['Market Visits %',d.marketVisits]].forEach(([lbl,arr])=>{
+    html += `<tr><td>${lbl}</td>` + arr.map(v=>`<td>${v==null?'—':v+'%'}</td>`).join('') + '</tr>';
+  });
+  html += '</tbody></table>';
+  document.getElementById('tbl-onboard').innerHTML = html;
+  document.getElementById('p2-note').innerHTML = '<div class="note">Live feed Google Sheet ke Input_ tab se aa raha hai.</div>';
+}
+
+const ATTR_METRIC_LABELS = {
+  'Total Attrition % (Qtrly)': 'Total Attrition',
+  'Voluntary Attrition % (Qtrly)': 'Voluntary Attrition',
+  '24M+ Voluntary Attrition %': 'Tenure: 24M+',
+  '12-24M Voluntary Attrition %': 'Tenure: 12-24M',
+  '6-12M Voluntary Attrition %': 'Tenure: 6-12M',
+  '0-6M Voluntary Attrition %': 'Tenure: 0-6M',
+  '12M+ Voluntary Attrition %': 'Tenure: 12M+',
+  '3-6M Voluntary Attrition %': 'Tenure: 3-6M',
+  '0-3M Voluntary Attrition %': 'Tenure: 0-3M'
+};
+const ATTR_METRIC_ORDER = {
+  MS: ['Total Attrition % (Qtrly)','Voluntary Attrition % (Qtrly)','24M+ Voluntary Attrition %','12-24M Voluntary Attrition %','6-12M Voluntary Attrition %','0-6M Voluntary Attrition %'],
+  E:  ['Total Attrition % (Qtrly)','Voluntary Attrition % (Qtrly)','12M+ Voluntary Attrition %','6-12M Voluntary Attrition %','3-6M Voluntary Attrition %','0-3M Voluntary Attrition %']
+};
+let attrMetricSelection = {}; // remembers last-picked metric per platform+level so it doesn't reset on every toggle
+
+function populateAttrMetricSelect(){
+  const d = ds();
+  const order = ATTR_METRIC_ORDER[state.level] || ATTR_METRIC_ORDER.MS;
+  const available = order.filter(m => d.attrition.metrics[m]);
+  const sel = document.getElementById('attrMetricSelect');
+  sel.innerHTML = available.map(m => `<option value="${m}">${ATTR_METRIC_LABELS[m]||m}</option>`).join('');
+  const key = state.platform+'_'+state.level;
+  const remembered = attrMetricSelection[key];
+  sel.value = available.includes(remembered) ? remembered : (available[0]||'');
+  return sel.value;
+}
+
+function renderAttrHeatmap(metricKey){
+  const d = ds();
+  const byDept = d.attrition.metrics[metricKey] || {};
+  let html = '<table><thead><tr><th>Dept</th>'+d.months.map(m=>`<th>${m}</th>`).join('')+'</tr></thead><tbody>';
+  Object.keys(byDept).forEach(dept=>{
+    const row = byDept[dept];
+    html += `<tr class="${dept==='Total'?'total':''}"><td>${dept}</td>` + row.map(v=>{
+      if(v==null) return '<td>—</td>';
+      // Attrition: lower is better (inverse of the manning heatmap's color logic).
+      const c = v>=10 ? '#fde8e6' : v>=5 ? '#fff3df' : '#e6f7ef';
+      const col = v>=10 ? '#e0473e' : v>=5 ? '#d98c0e' : '#1aa572';
+      return `<td><span class="heat" style="background:${c};color:${col};padding:2px 7px;">${v}%</span></td>`;
+    }).join('') + '</tr>';
+  });
+  html += '</tbody></table>';
+  document.getElementById('tbl-attr-heatmap').innerHTML = html;
+}
+
+document.getElementById('attrMetricSelect').addEventListener('change', e=>{
+  const key = state.platform+'_'+state.level;
+  attrMetricSelection[key] = e.target.value;
+  renderAttrHeatmap(e.target.value);
+});
+
+function renderPage3(){
+  const d = ds();
+  const a = d.attrition;
+  const ti = lastIdx(a.total);
+  document.getElementById('p3-kpis').innerHTML = [
+    kpiCard('Total Attrition % (latest qtr)', fmt(last(a.total)), '', '', deltaTag(a.total[ti],prevOf(a.total,ti),false)),
+    kpiCard('Voluntary Attrition %', fmt(last(a.voluntary))),
+    kpiCard('Total Exits (latest qtr)', last(a.totalExit)??'—'),
+    kpiCard('Cumulative Exits (tracked)', (a.totalExit||[]).some(v=>v!=null) ? a.totalExit.reduce((s,v)=>s+(v||0),0) : '—')
+  ].join('');
+
+  lineChart('chart-attr-total', d.months, [{label:'Total Attrition %',data:a.total,borderColor:palette[4],backgroundColor:palette[4],tension:.3}],{beginAtZero:false});
+  lineChart('chart-attr-vol', d.months, [{label:'Voluntary Attrition %',data:a.voluntary,borderColor:palette[2],backgroundColor:palette[2],tension:.3}],{beginAtZero:false});
+
+  let tenureLabels, tenureSeriesData;
+  if(a.t24){
+    tenureLabels = ['24M+','12-24M','6-12M','0-6M'];
+    tenureSeriesData = [last(a.t24),last(a.t12_24),last(a.t6_12),last(a.t0_6)];
+  } else {
+    tenureLabels = ['12M+','6-12M','3-6M','0-3M'];
+    tenureSeriesData = [last(a.t12p),last(a.t6_12),last(a.t3_6),last(a.t0_3)];
+  }
+  barChart('chart-attr-tenure', tenureLabels, [{label:'Voluntary Attrition % (latest qtr)',data:tenureSeriesData,backgroundColor:palette}]);
+  lineChart('chart-exits', d.months, [{label:'Total Exits',data:a.totalExit,borderColor:palette[5],backgroundColor:palette[5],tension:.3}]);
+
+  // ---- Department-wise Attrition (Total Attrition %, latest period) ----
+  const deptEntries = Object.entries(a.byDeptTotal || {}).filter(([dept]) => dept !== 'Total');
+  const deptLabels = deptEntries.map(([dept]) => dept);
+  const deptLatest = deptEntries.map(([,vals]) => last(vals));
+  const sortedIdx = deptLabels.map((_,i)=>i).sort((x,y)=>(deptLatest[y]??-1)-(deptLatest[x]??-1));
+  const sLabels = sortedIdx.map(i=>deptLabels[i]);
+  const sLatest = sortedIdx.map(i=>deptLatest[i]);
+  const barColors = sLatest.map(v => v==null ? '#94a3b8' : v>=10 ? palette[4] : v>=5 ? palette[2] : palette[1]);
+  barChart('chart-dept-attr', sLabels, [{label:'Attrition % (latest)',data:sLatest,backgroundColor:barColors}]);
+
+  let deptTbl = '<table><thead><tr><th>Dept</th><th>Attrition % (latest)</th></tr></thead><tbody>';
+  sLabels.forEach((dept,i)=>{
+    const v = sLatest[i];
+    const col = v==null?'#6b7585': v>=10?'#e0473e': v>=5?'#d98c0e':'#1aa572';
+    deptTbl += `<tr><td>${dept}</td><td style="color:${col};font-weight:700;">${v==null?'—':v+'%'}</td></tr>`;
+  });
+  deptTbl += '</tbody></table>';
+  document.getElementById('tbl-dept-attr').innerHTML = deptTbl;
+
+  // ---- Department-wise Total Exits (only present for Entry-level sheets) ----
+  const exitEntries = Object.entries(a.byDeptExits || {}).filter(([dept]) => dept !== 'Total');
+  const exitsCard = document.getElementById('card-dept-exits');
+  if(exitEntries.length){
+    exitsCard.style.display = 'block';
+    let exitTbl = '<table><thead><tr><th>Dept</th><th>Total Exits (latest)</th></tr></thead><tbody>';
+    exitEntries
+      .map(([dept,vals]) => [dept, last(vals)])
+      .sort((x,y)=>(y[1]??-1)-(x[1]??-1))
+      .forEach(([dept,v])=>{ exitTbl += `<tr><td>${dept}</td><td>${v==null?'—':v}</td></tr>`; });
+    exitTbl += '</tbody></table>';
+    document.getElementById('tbl-dept-exits').innerHTML = exitTbl;
+  } else {
+    exitsCard.style.display = 'none';
+  }
+
+  const selectedMetric = populateAttrMetricSelect();
+  if(selectedMetric) renderAttrHeatmap(selectedMetric);
+
+  renderExitInterviews();
+}
+
+function renderOverview(){
+  const d = ds();
+  const plat = state.platform==='MP'?'Marketplace':'SaaS';
+  const lvl = state.level==='MS'?'Mid+Senior':'Entry Level';
+  const man = d.manning['Total']||[]; const mi=lastIdx(man);
+  const hc = d.hc['Total']||[]; const hi=lastIdx(hc);
+  const jo = d.joinings['Total']||[];
+  const off = d.offerJoin['Total']||[]; const oi=lastIdx(off);
+  const src = d.sourceMix['Total']||[]; const si=lastIdx(src);
+  const a = d.attrition; const ai=lastIdx(a.total);
+
+  document.getElementById('ov-kpis').innerHTML = [
+    kpiCard('Manning % — '+plat+' / '+lvl, fmt(last(man))),
+    kpiCard('Headcount on ground', last(hc)??'—'),
+    kpiCard('Total Attrition % (latest qtr)', fmt(last(a.total))),
+    kpiCard('Offer→Join %', fmt(last(off)))
+  ].join('');
+
+  let weakest=null, weakestVal=999;
+  Object.entries(d.manning).forEach(([k,v])=>{ if(k!=='Total'){ const lv=last(v); if(lv!=null && lv<weakestVal){weakestVal=lv;weakest=k;} } });
+  const hcChange = (last(hc)!=null && hc[0]!=null && hc[0]!==0)? Math.round(((last(hc)-hc[0])/hc[0])*100) : null;
+
+  const collected = []; // every insight, tagged, so we can also build the Executive Snapshot below
+  function li(cls,sym,text,action){
+    collected.push({cls, text, action});
+    return `<li><div class="dot ${cls}">${sym}</div><div>${text}</div></li>`;
+  }
+
+  let manningInsights = '';
+  manningInsights += (last(man)!=null) ? ((last(man)>=98) ? li('good','✓',`Overall ${lvl} manning is healthy at <b>${fmt(last(man))}</b> in the latest period.`) :
+                                       li('warn','!',`Overall ${lvl} manning is below target at <b>${fmt(last(man))}</b>.`, `Close the manning gap — prioritize open reqs for ${lvl}.`)) : li('info','i','Manning data loading…');
+  manningInsights += weakest ? li('warn','!',`<b>${weakest}</b> has the lowest manning at <b>${weakestVal}%</b> — needs HRBP attention.`, `Fast-track hiring for <b>${weakest}</b> (lowest manning at ${weakestVal}%).`) : '';
+  manningInsights += hcChange!=null ? li(hcChange<0?'warn':'info', hcChange<0?'!':'i', `Headcount has ${hcChange<0?'shrunk':'grown'} by <b>${Math.abs(hcChange)}%</b> over the tracked period.`) : '';
+
+  let hiringInsights = '';
+  hiringInsights += li('info','i',`Cumulative joinings across all tracked periods: <b>${jo.reduce((s,v)=>s+(v||0),0)}</b>.`);
+  hiringInsights += off[oi]!=null ? li(off[oi]>=80?'good':'warn', off[oi]>=80?'✓':'!', `Offer→Join conversion is <b>${off[oi]}%</b> in the latest period.`, `Investigate offer drop-offs — conversion at ${off[oi]}% is below the 80% bar.`) : '';
+  hiringInsights += src[si]!=null ? li('info','i',`<b>${src[si]}%</b> of joinings are coming via non-referral channels.`) : '';
+
+  let attrInsights = '';
+  attrInsights += a.total[ai]!=null ? li(a.total[ai]<=10?'good':a.total[ai]<=20?'warn':'bad', a.total[ai]<=10?'✓':'!', `Total attrition is at <b>${a.total[ai]}%</b> in the latest quarter.`, a.total[ai]>10?`Review attrition drivers for ${lvl} — currently at ${a.total[ai]}%, above the healthy range.`:undefined) : '';
+  let worstDept=null, worstVal=-1;
+  Object.entries(a.byDeptTotal||{}).forEach(([dept,vals])=>{
+    if(dept==='Total') return;
+    const lv = last(vals);
+    if(lv!=null && lv>worstVal){ worstVal=lv; worstDept=dept; }
+  });
+  attrInsights += worstDept ? li(worstVal>=10?'bad':'warn','!',`<b>${worstDept}</b> has the highest attrition among departments at <b>${worstVal}%</b>.`, `Schedule a retention review with HRBP for <b>${worstDept}</b> (highest attrition at ${worstVal}%).`) : '';
+  attrInsights += (a.totalExit||[]).some(v=>v!=null) ? li('info','i',`Total exits across all tracked periods: <b>${a.totalExit.reduce((s,v)=>s+(v||0),0)}</b>.`) : '';
+
+  let processInsights = '';
+  const adh = last(d.adherence);
+  processInsights += adh!=null ? li(adh>=90?'good':'warn', adh>=90?'✓':'!', `Recruitment process adherence is <b>${adh}%</b>.`, `Reinforce recruitment SOP compliance — adherence at ${adh}% is below the 90% bar.`) : li('info','i','Onboarding/adherence metrics not tracked for this level.');
+  const mv = last(d.marketVisits);
+  processInsights += mv!=null ? li(mv>=70?'good':'warn', mv>=70?'✓':'!', `Market visits completion stands at <b>${mv}%</b>.`, mv<70?`Push market visit completion — at ${mv}%, below the 70% target.`:undefined) : '';
+
+  // ---- Executive Snapshot: a 15-minute, no-thinking-required scan for CHRO/CEO ----
+  const goodItems = collected.filter(i => i.cls === 'good');
+  const watchItems = collected.filter(i => i.cls === 'warn');
+  const actionItems = collected.filter(i => i.cls === 'bad');
+  const actions = collected.filter(i => i.action).map(i => i.action);
+  const uniqueActions = Array.from(new Set(actions)).slice(0, 5);
+
+  function snapshotList(items, emptyText){
+    if(!items.length) return `<li style="color:var(--sub);">${emptyText}</li>`;
+    return items.map(i => `<li><div class="dot ${i.cls}">${i.cls==='good'?'✓':i.cls==='bad'?'✕':'!'}</div><div>${i.text}</div></li>`).join('');
+  }
+
+  document.getElementById('ov-snapshot').innerHTML = `
+    <div class="snap-card snap-good">
+      <h4>✅ Working Well (${goodItems.length})</h4>
+      <ul class="ins-list">${snapshotList(goodItems, 'Nothing flagged as strongly healthy this period.')}</ul>
+    </div>
+    <div class="snap-card snap-watch">
+      <h4>⚠️ Needs Watching (${watchItems.length})</h4>
+      <ul class="ins-list">${snapshotList(watchItems, 'No medium-risk items flagged.')}</ul>
+    </div>
+    <div class="snap-card snap-action">
+      <h4>🔴 Act Now (${actionItems.length})</h4>
+      <ul class="ins-list">${snapshotList(actionItems, 'No critical items this period.')}</ul>
+    </div>
+  `;
+  const ovActionsEl = document.getElementById('ov-actions');
+  ovActionsEl.style.display = uniqueActions.length ? 'block' : 'none';
+  ovActionsEl.innerHTML = uniqueActions.length
+    ? `<h4>🎯 Recommended Next Steps</h4><ul class="ins-list">${uniqueActions.map(a=>`<li><div class="dot info">→</div><div>${a}</div></li>`).join('')}</ul>`
+    : '';
+
+  document.getElementById('ov-insights').innerHTML = `
+    <div class="ins-card"><h4>Manning &amp; Headcount</h4><ul class="ins-list">${manningInsights}</ul></div>
+    <div class="ins-card"><h4>Hiring Funnel</h4><ul class="ins-list">${hiringInsights}</ul></div>
+    <div class="ins-card"><h4>Attrition</h4><ul class="ins-list">${attrInsights}</ul></div>
+    <div class="ins-card"><h4>Recruitment Process &amp; Onboarding</h4><ul class="ins-list">${processInsights}</ul></div>
+  `;
+}
+
+function renderAll(){
+  if(!DATA) return;
+  populateDeptSelect();
+  renderOverview();
+  renderPage1();
+  renderPage2();
+  renderPage3();
+}
+
+document.getElementById('platformSeg').addEventListener('click',e=>{
+  const btn = e.target.closest('button'); if(!btn) return;
+  document.querySelectorAll('#platformSeg button').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active'); state.platform = btn.dataset.val; state.dept='Total'; renderAll();
+});
+document.getElementById('levelSeg').addEventListener('click',e=>{
+  const btn = e.target.closest('button'); if(!btn) return;
+  document.querySelectorAll('#levelSeg button').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active'); state.level = btn.dataset.val; state.dept='Total'; renderAll();
+});
+document.getElementById('deptSelect').addEventListener('change',e=>{ state.dept = e.target.value; renderPage1(); });
+document.getElementById('pageNav').addEventListener('click',e=>{
+  const btn = e.target.closest('button'); if(!btn) return;
+  document.querySelectorAll('#pageNav button').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('page-'+btn.dataset.page).classList.add('active');
+});
+
+loadAllData();
+</script>
+</body>
+</html>
