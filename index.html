@@ -778,8 +778,8 @@ loadAllData();
 <div id="hrbot-panel">
   <div id="hrbot-header">
     <div>
-      <div class="htitle">🤖 Wheelseye HR Pulse Assistant</div>
-      <div class="hsub">Zero API</div>
+      <div class="htitle">🤖 HR Pulse Assistant</div>
+      <div class="hsub">Live data se seedha jawab · Zero API · Free</div>
     </div>
     <button id="hrbot-close">✕</button>
   </div>
@@ -847,12 +847,12 @@ loadAllData();
   /* ── Metric series picker ─────────────────────────────────── */
   function metricSeries(d,key){
     const map={
-      manning:{a:d.manning?.Total,l:'Manning %',s:'%'},
-      headcount:{a:d.hc?.Total,l:'Headcount',s:''},
-      joining:{a:d.joinings?.Total,l:'Joinings',s:''},
-      voluntary:{a:d.attrition?.voluntary,l:'Voluntary Attrition %',s:'%'},
-      offer:{a:d.offerJoin?.Total,l:'Offer→Join %',s:'%'},
-      attrition:{a:d.attrition?.total,l:'Total Attrition %',s:'%'},
+      manning:   {a:d.manning?.Total,          l:'Manning %',            suf:'%'},
+      headcount: {a:d.hc?.Total,               l:'Headcount',            suf:''},
+      joining:   {a:d.joinings?.Total,          l:'Joinings',             suf:''},
+      voluntary: {a:d.attrition?.voluntary,     l:'Voluntary Attrition %',suf:'%'},
+      offer:     {a:d.offerJoin?.Total,         l:'Offer→Join %',         suf:'%'},
+      attrition: {a:d.attrition?.total,         l:'Total Attrition %',    suf:'%'},
     };
     return map[key]||map.attrition;
   }
