@@ -383,14 +383,25 @@ function navigate(route){ window.location.hash = route; }
 // No real backend yet — session lives in memory only, per current phase scope.
 let AUTH_STATE = { loggedIn:false };
 
+// Fixed production credentials — simple frontend-only check, no backend
+// auth, no signup, no registration, no forgot-password. Matches exactly
+// against a single known user/pass pair; anything else shows an error.
+const PRODUCTION_CREDENTIALS = { email: "HR.Analytics@wheelseye.com", password: "Qwerty" };
+
 function LoginPage({ onLogin }){
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
   const submit = (e) => {
     e.preventDefault();
-    AUTH_STATE.loggedIn = true;
-    onLogin();
-    navigate("#/overview");
+    if (email === PRODUCTION_CREDENTIALS.email && password === PRODUCTION_CREDENTIALS.password){
+      setError("");
+      AUTH_STATE.loggedIn = true;
+      onLogin();
+      navigate("#/overview");
+    } else {
+      setError("Invalid Credentials");
+    }
   };
   return (
     <div className="login-screen">
@@ -405,7 +416,7 @@ function LoginPage({ onLogin }){
           <input id="password" type="password" placeholder="••••••••" value={password} onChange={e=>setPassword(e.target.value)} required />
         </div>
         <button className="login-btn" type="submit">Sign in</button>
-        <div className="login-note">Authentication is not yet wired to a backend — any credentials proceed for this phase.</div>
+        {error && <div className="login-note" style={{color:"#c0392b"}}>{error}</div>}
       </form>
     </div>
   );
@@ -560,8 +571,17 @@ function Scorecard(){
               <td className="seg-name">{seg.label}</td>
               {KPI_REGISTRY.map(kpi => {
                 if (!kpi.isLive) return <td key={kpi.id} className="muted">--</td>;
-                const periodKey = kpi.ownPeriod ? Object.keys(kpi.source).slice(-1)[0] : LATEST_PERIOD;
-                const val = kpi.source && kpi.source[periodKey] ? kpi.source[periodKey][seg.id] : null;
+                // Read RAW[kpi.id] live at render time instead of kpi.source —
+                // kpi.source was captured once when KPI_REGISTRY was first
+                // declared, so it kept pointing at the embedded snapshot even
+                // after applyHydratedData_() reassigned RAW.headcount (etc.)
+                // to the freshly hydrated object. RAW itself is never
+                // replaced wholesale, so RAW[kpi.id] always reflects
+                // whatever hydrateFromAppsScript() most recently loaded —
+                // exactly the same live binding Manning's dept tables use.
+                const source = RAW[kpi.id];
+                const periodKey = kpi.ownPeriod ? Object.keys(source).slice(-1)[0] : LATEST_PERIOD;
+                const val = source && source[periodKey] ? source[periodKey][seg.id] : null;
                 return <td key={kpi.id}>{fmt(kpi, val)}</td>;
               })}
             </tr>
